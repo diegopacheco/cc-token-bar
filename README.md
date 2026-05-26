@@ -1,5 +1,9 @@
 # cc-token-bar
 
+<p align="center">
+  <img src="./cc-token-bar-logo.png" alt="cc-token-bar logo" width="420" />
+</p>
+
 A native macOS menu bar app that surfaces Claude Code token usage, cost, and tool-by-tool breakdown — fed by hooks Claude Code already calls into. All data stays local.
 
 ```
@@ -170,15 +174,27 @@ Full design — including data sources, metrics catalog, attribution model, and 
 
 ## Result
 
-This is what it looks like running against real Claude Code data on this machine — 70 sessions backfilled at install, 65 of them touched today, 97.3 % cache hit ratio:
+The dropdown has two tabs — **Cost** and **Latency** — switched by the segmented control under the title. Both screenshots below run against real Claude Code data on this machine: 87 sessions, 96.6 % cache hit ratio.
 
-![cc-token-bar running in the menu bar](./cc-bar-result.png)
+### Cost tab
 
-What you're seeing, top to bottom:
+![cc-token-bar Cost tab](./screenshot-cost.png)
 
-- **Header KPIs** — `Today` and `All time` token counts with the running USD cost and session count. Tokens are formatted compactly (`537.1M`); cost uses monospaced digits so the column never jitters as numbers grow.
-- **Cache hit ratio** — `97.3%` in green (the threshold is 60 %; below that it turns orange). This is `cache_reads / (cache_reads + cache_writes + input)` across all sessions — the most actionable single number for spotting prompt cache regressions.
-- **Last 7 days** — stacked bar chart, input (blue) over output (orange). Heavy single-day session shows clearly on the right.
-- **Tools by cost** — each row: tool name, gradient bar normalized to the top spender, $ cost, invocation count. Cost is estimated from `tool_input + tool_response` bytes ÷ 4, priced at the per-session weighted input rate.
+The default view — where your tokens and dollars go. Top to bottom:
+
+- **Header KPIs** — `Today` and `All time` token counts with the running USD cost and session count. Tokens are formatted compactly (`124.2M`); cost uses monospaced digits so the column never jitters as numbers grow.
+- **Cache hit ratio** — `96.6%` in green (the threshold is 60 %; below that it turns orange). This is `cache_reads / (cache_reads + cache_writes + input)` across all sessions — the most actionable single number for spotting prompt cache regressions.
+- **Last 7 days** — stacked bar chart, input (blue) over output (orange). The one heavy day shows clearly as the tall Saturday bar.
+- **Tools by cost** — each row: tool name, gradient bar normalized to the top spender, $ cost, invocation count. Cost is estimated from `tool_input + tool_response` bytes ÷ 4, priced at the per-session weighted input rate. `Read` and `Edit` dominate the spend here.
 - **Cost by model** — every model the hook has seen, with $ and % share. Models without pricing entries (synthetic helpers, third-party adapters) show `$0.00` rather than crashing.
-- **Footer** — `Open data folder` reveals `~/.cc-token-bar/` in Finder so you can inspect the raw JSON; `Quit` exits cleanly (the LaunchAgent will respawn it on next login).
+
+### Latency tab
+
+![cc-token-bar Latency tab](./screenshot-latency.png)
+
+The same tools, re-ranked by **average wall-clock time per call** instead of by cost — answering "what's making me wait" rather than "what's burning tokens":
+
+- **Tool latency (avg per call)** — each row: tool name, gradient bar normalized to the slowest tool, average duration, invocation count. Durations auto-format across units (`439.59s`, `590 ms`, `428 ms`) from the elapsed time the hook records between a tool firing and its `PostToolUse` event.
+- Slow orchestration tools float to the top — `mcp__repo-*` at `439.59s` over just `3×` calls, `AskUserQuestion` and `Agent` in the tens of seconds — while the high-frequency primitives sink to the bottom: `Bash` averages `5.02s` but ran `887×`, and `Edit` averages just `428 ms` across `464×`. Cost and latency rank the tool list very differently.
+
+The footer is shared by both tabs: `Open data folder` reveals `~/.cc-token-bar/` in Finder so you can inspect the raw JSON; `Quit` exits cleanly (the LaunchAgent will respawn it on next login).
