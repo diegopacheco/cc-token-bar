@@ -11,6 +11,21 @@ enum PanelTab: Hashable {
     case budget
 }
 
+private struct FieldChrome: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .textFieldStyle(.plain)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.06)))
+            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.primary.opacity(0.12), lineWidth: 1))
+    }
+}
+
+private extension View {
+    func fieldChrome() -> some View { modifier(FieldChrome()) }
+}
+
 struct PanelView: View {
     @ObservedObject var store: DataStore
     @ObservedObject var prefs: PrefsStore
@@ -84,7 +99,11 @@ struct PanelView: View {
     }
 
     private func tabButton(_ t: PanelTab, _ symbol: String, _ name: String) -> some View {
-        Button { tab = t } label: {
+        Button {
+            var tx = Transaction()
+            tx.disablesAnimations = true
+            withTransaction(tx) { tab = t }
+        } label: {
             VStack(spacing: 3) {
                 Image(systemName: symbol).font(.system(size: 14, weight: .medium))
                 Text(name).font(.system(size: 8)).lineLimit(1)
@@ -335,9 +354,9 @@ struct PanelView: View {
                     ForEach(AlertOp.allCases) { Text($0.rawValue).tag($0) }
                 }.labelsHidden().frame(width: 64)
                 TextField("amount", text: $draftValue)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 86)
                     .onChange(of: draftValue) { draftValue = Self.numericOnly($0) }
+                    .fieldChrome()
+                    .frame(width: 96)
                 Button {
                     if let v = Double(draftValue) {
                         prefs.addAlert(metric: draftMetric, op: draftOp, value: v)
@@ -364,7 +383,7 @@ struct PanelView: View {
                             ForEach(AlertOp.allCases) { Text($0.rawValue).tag($0) }
                         }.labelsHidden().frame(width: 64)
                         TextField("", value: $alert.value, format: .number)
-                            .textFieldStyle(.roundedBorder).frame(width: 86)
+                            .fieldChrome().frame(width: 96)
                         Button { prefs.removeAlert(alert.id) } label: {
                             Image(systemName: "trash").font(.system(size: 13))
                         }.buttonStyle(.plain).foregroundStyle(.secondary)
@@ -395,7 +414,7 @@ struct PanelView: View {
             HStack(spacing: 6) {
                 Text("$").foregroundStyle(.secondary)
                 TextField("amount", value: $prefs.budgetUSD, format: .number)
-                    .textFieldStyle(.roundedBorder).frame(width: 110)
+                    .fieldChrome().frame(width: 110)
                 Text("per day").font(.system(size: 11)).foregroundStyle(.secondary)
             }
             if budget <= 0 {
