@@ -426,6 +426,7 @@ Both scripts: no comments, no `sleep > 1`, no emojis (per project conventions).
 | 12 | Alert evaluation       | Per-rule comparison against **today's** cost/token total, run on every `DataStore` refresh; one banner per rule per day (`alerts-state.json` de-dup). Delivered via `osascript display notification` (not `UserNotifications`, which an ad-hoc-signed app can't register). Works with popover closed while the app runs |
 | 13 | Budget period          | **Daily** — the donut tracks today's cost against a user-set daily cap, matching the daily alert model. Single constant to change if a monthly/lifetime cap is wanted later |
 | 14 | Budget gauge           | Hand-drawn `Circle().trim()` donut, not Swift Charts `SectorMark` (which needs macOS 14), to hold the macOS 13 deployment target |
+| 15 | Editable-panel focus   | The borderless `NSPanel` is subclassed (`KeyablePanel`, `canBecomeKey = true`) and shown with `makeKeyAndOrderFront` + `NSApp.activate`. Without this the Alerts/Budget text fields can't take keyboard focus — a borderless window never becomes key, and `orderFrontRegardless()` doesn't make it key |
 | 8 | Playwright tools       | Collapse all `mcp__playwright__*` to one `mcp_playwright` row in both tabs                                 |
 | 9 | Latency source         | Transcript `tool_use`→`tool_result` timestamp delta; no hook changes                                      |
 
