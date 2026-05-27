@@ -1,0 +1,22 @@
+README.md
+  s_f26f23a515e2d4::t_21de40dc321323 12-14,17-19
+app/Sources/cc-token-bar/Notifier.swift
+  s_f26f23a515e2d4::t_2e4996a45e3d65 23
+  s_f26f23a515e2d4::t_f5f5c06ab015cf 24-27,31-42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "73c860b6d3b59d4aaba1231744562056bf998a93",
+  "prompts": {},
+  "sessions": {
+    "s_f26f23a515e2d4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "09adbae6-f21a-403a-a388-44a0a3589e29",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "diegopacheco <diego.pacheco.it@gmail.com>"
+    }
+  }
+}
