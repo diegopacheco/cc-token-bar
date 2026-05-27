@@ -1,0 +1,35 @@
+app/Sources/cc-token-bar/Views.swift
+  s_f26f23a515e2d4::t_e1bfdcb671ccd3 212-244,248,258-260,267-281,283-289,292
+app/Sources/cc-token-bar/DataStore.swift
+  s_f26f23a515e2d4::t_b9bee26761416f 317
+  s_f26f23a515e2d4::t_04e0610381d21a 133,135,142
+  s_f26f23a515e2d4::t_c036c869bb5c33 221-236
+  s_f26f23a515e2d4::t_444d377ef0ab6e 196-201
+app/Sources/cc-token-bar/Models.swift
+  s_f26f23a515e2d4::t_d16fa50fd0fd12 96-103
+  s_f26f23a515e2d4::t_7199f00defa088 125
+  s_f26f23a515e2d4::t_414651c9b8b9ae 113
+design-doc.md
+  s_f26f23a515e2d4::t_a3c928d437331a 248
+  s_f26f23a515e2d4::t_e479073b4efbd4 243-244
+  s_f26f23a515e2d4::t_f02f14e86ad68f 312,314-324,330-331,333-342
+  s_f26f23a515e2d4::t_db55249386d6ad 375
+README.md
+  s_f26f23a515e2d4::t_03644059c56056 209,211-213,219,221-223
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "d8005c80db1ff1fae0bc135b5f1e0ec5e1870b2e",
+  "prompts": {},
+  "sessions": {
+    "s_f26f23a515e2d4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "09adbae6-f21a-403a-a388-44a0a3589e29",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "diegopacheco <diego.pacheco.it@gmail.com>"
+    }
+  }
+}
