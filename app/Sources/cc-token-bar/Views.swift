@@ -209,11 +209,43 @@ struct PanelView: View {
     }
 
     private var aggregationsSection: some View {
-        periodsSection
+        VStack(alignment: .leading, spacing: 10) {
+            sectionTitle("Rolling windows — cost · tokens · avg latency")
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10),
+                                GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                ForEach(store.agg.periods) { p in periodCard(p) }
+            }
+        }
+        .padding(14)
+    }
+
+    private func periodCard(_ p: PeriodRollup) -> some View {
+        let maxCost = store.agg.periods.map(\.costUSD).max() ?? 0
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(p.label).font(.system(size: 12, weight: .semibold))
+                Spacer()
+                Text(p.sub).font(.system(size: 9)).foregroundStyle(.secondary)
+            }
+            Text(DataStore.formatUSD(p.costUSD))
+                .font(.system(size: 18, weight: .bold)).monospacedDigit()
+                .foregroundStyle(Color.accentColor)
+            bar(fraction: maxCost > 0 ? p.costUSD / maxCost : 0)
+            HStack(spacing: 6) {
+                Text(DataStore.formatTokens(p.tokens))
+                Text("·").foregroundStyle(.tertiary)
+                Text(p.avgLatencyMs > 0 ? DataStore.formatMs(p.avgLatencyMs) : "—")
+            }
+            .font(.system(size: 11)).foregroundStyle(.secondary).monospacedDigit()
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.4))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     private var projectionsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             sectionTitle("Projected at last 7-day pace")
             HStack(spacing: 10) {
                 kpi(title: "Next 7 days",
@@ -223,42 +255,42 @@ struct PanelView: View {
                     value: DataStore.formatUSD(store.agg.projection.monthlyCost),
                     sub: "\(DataStore.formatTokens(store.agg.projection.monthlyTokens)) tokens")
             }
-            Text("Extrapolated from your last 7 days of usage: daily rate × 7 for the week, × 30 for the month.")
+            trendChart(title: "Cost trend", value: { $0.cost })
+            trendChart(title: "Token trend", value: { Double($0.tokens) })
+            Text("Solid line = actual daily usage (last 14 days). Dashed line = projected forward at your last 7-day pace.")
                 .font(.system(size: 11)).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(14)
     }
 
-    private var periodsSection: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            sectionTitle("By period — cost · tokens · avg latency")
-            HStack(spacing: 8) {
-                Text("").frame(width: 72, alignment: .leading)
-                Text("Cost").frame(maxWidth: .infinity, alignment: .trailing)
-                Text("Tokens").frame(maxWidth: .infinity, alignment: .trailing)
-                Text("Latency").frame(maxWidth: .infinity, alignment: .trailing)
-            }
-            .font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
-            ForEach(store.agg.periods) { p in
-                HStack(spacing: 8) {
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(p.label).font(.system(size: 12, weight: .medium))
-                        Text(p.sub).font(.system(size: 9)).foregroundStyle(.secondary)
-                    }
-                    .frame(width: 72, alignment: .leading)
-                    Text(DataStore.formatUSD(p.costUSD))
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                    Text(DataStore.formatTokens(p.tokens))
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                    Text(p.avgLatencyMs > 0 ? DataStore.formatMs(p.avgLatencyMs) : "—")
-                        .frame(maxWidth: .infinity, alignment: .trailing)
+    private func trendChart(title: String, value: @escaping (TrendPoint) -> Double) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            sectionTitle(title)
+            Chart(store.agg.trend) { p in
+                if !p.projected {
+                    AreaMark(x: .value("Day", p.date), y: .value(title, value(p)))
+                        .foregroundStyle(LinearGradient(
+                            colors: [Color.accentColor.opacity(0.28), Color.accentColor.opacity(0.02)],
+                            startPoint: .top, endPoint: .bottom))
+                        .interpolationMethod(.monotone)
                 }
-                .font(.system(size: 12)).monospacedDigit()
-                .padding(.vertical, 3)
+                LineMark(x: .value("Day", p.date), y: .value(title, value(p)))
+                    .foregroundStyle(by: .value("Kind", p.projected ? "Projected" : "Actual"))
+                    .lineStyle(StrokeStyle(lineWidth: 2, dash: p.projected ? [4, 3] : []))
+                    .interpolationMethod(.monotone)
             }
+            .chartForegroundStyleScale(["Actual": Color.accentColor, "Projected": Color.orange])
+            .chartLegend(position: .top, alignment: .trailing, spacing: 4)
+            .chartYAxis(.hidden)
+            .chartXAxis {
+                AxisMarks(values: .automatic(desiredCount: 4)) {
+                    AxisValueLabel(format: .dateTime.month(.defaultDigits).day())
+                        .font(.system(size: 9)).foregroundStyle(.secondary)
+                }
+            }
+            .frame(height: 92)
         }
-        .padding(.horizontal, 14).padding(.vertical, 10)
     }
 
     private func bar(fraction: Double) -> some View {

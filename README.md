@@ -206,20 +206,20 @@ The same tools, re-ranked by **average wall-clock time per call** instead of by 
 
 ![cc-token-bar Aggregates tab](./screenshot-aggregates.png)
 
-The same cost, token, and latency numbers — but rolled up over **rolling trailing windows** instead of all-time. One row per window:
+The same cost, token, and latency numbers — but rolled up over **rolling trailing windows**, as a 2×2 card grid:
 
-- **Day** = last 24h, **Week** = last 7 days, **Month** = last 30 days, **Year** = last 365 days. These are rolling windows, not calendar periods — "Week" always means the trailing seven days, with no Monday reset.
-- Each row shows **total cost**, **total tokens**, and **average tool latency** for that window. A session counts toward a window when its last activity falls inside it; the windows nest, so a session three days old contributes to Week, Month, and Year but not Day.
-- In the shot above Month and Year are identical (`$1,940.57`, `706.0M`, `3.70s`) because this machine's tracked history is younger than 30 days — there simply are no sessions older than a month yet, so both windows capture the same set. That's the honest readout, not a placeholder.
+- One card per window: **Day** = last 24h, **Week** = last 7 days, **Month** = last 30 days, **Year** = last 365 days. These are rolling windows, not calendar periods — "Week" always means the trailing seven days, with no Monday reset.
+- Each card leads with that window's **cost** (large, in accent blue), a **gradient bar** showing its cost as a fraction of the largest window, and a sub-line with **total tokens** and **average tool latency**. A session counts toward a window when its last activity falls inside it; the windows nest, so a session three days old contributes to Week, Month, and Year but not Day.
+- In the shot above Month and Year are identical (`$1,973.80`, `716.7M`, `3.66s` — both bars full) because this machine's tracked history is younger than 30 days — there are no sessions older than a month yet, so both windows capture the same set. That's the honest readout, not a placeholder.
 
 ### Projections tab
 
 ![cc-token-bar Projections tab](./screenshot-projections.png)
 
-A forward-looking run-rate built from **actual recent consumption**:
+A forward-looking run-rate built from **actual recent consumption**, with the trend drawn out as charts:
 
-- Two cards — **Next 7 days** and **Next 30 days** — each with a projected **cost** and **token** count.
-- Both extrapolate your *last 7 days*: a daily rate (`7-day total ÷ 7`) multiplied by 7 for the week card and 30 for the month card. At this machine's pace that's `$1,484.78` / `581.4M` tokens for the coming week and `$6,363.34` / `2.49B` tokens for the coming month.
-- It's a current-pace projection, not a calendar forecast — it answers "if I keep working like I did this past week, what will it cost", and it moves as your recent usage moves.
+- Two cards — **Next 7 days** (`$1,518.01` / `592.1M` tokens) and **Next 30 days** (`$6,505.74` / `2.54B` tokens) — each a projected **cost** and **token** count.
+- Two **trend charts**, one for cost and one for tokens. Each plots the **last 14 days of actual daily usage** as a solid blue line with a filled area, then a **dashed orange line** projecting 7 days forward at your current pace. The dashed line connects to the last real point, so you read the past and the projection as one continuous shape.
+- Everything extrapolates your *last 7 days*: a daily rate (`7-day total ÷ 7`) × 7 for the week and × 30 for the month. It's a current-pace projection, not a calendar forecast — it answers "if I keep working like I did this past week, what will it cost", and it moves as your recent usage moves.
 
 The footer is shared by every tab: `Open data folder` reveals `~/.cc-token-bar/` in Finder so you can inspect the raw JSON; `Quit` exits cleanly (the LaunchAgent will respawn it on next login).

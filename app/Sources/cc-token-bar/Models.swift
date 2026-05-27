@@ -93,6 +93,14 @@ struct Projection: Equatable {
     var monthlyTokens: Int = 0
 }
 
+struct TrendPoint: Identifiable, Equatable {
+    let id: String
+    let date: Date
+    let cost: Double
+    let tokens: Int
+    let projected: Bool
+}
+
 struct Aggregates: Equatable {
     var today: TokenTotals = TokenTotals()
     var lifetime: TokenTotals = TokenTotals()
@@ -102,6 +110,7 @@ struct Aggregates: Equatable {
     var toolLatencies: [ToolLatency] = []
     var periods: [PeriodRollup] = []
     var projection: Projection = Projection()
+    var trend: [TrendPoint] = []
     var cacheHitRatio: Double = 0
     var sessionsToday: Int = 0
     var sessionsLifetime: Int = 0
@@ -113,6 +122,7 @@ struct Aggregates: Equatable {
             && lhs.toolLatencies == rhs.toolLatencies
             && lhs.periods == rhs.periods
             && lhs.projection == rhs.projection
+            && lhs.trend == rhs.trend
             && lhs.cacheHitRatio == rhs.cacheHitRatio
             && lhs.sessionsToday == rhs.sessionsToday
             && lhs.sessionsLifetime == rhs.sessionsLifetime

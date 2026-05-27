@@ -240,12 +240,12 @@ Beyond "total tokens" and "tools by cost", here's the broader set that's cheap t
 
 - **Cost** *(default, shown on every open)* — the full metric set: Today/All-time KPIs, cache hit ratio, 7-day chart, tools by cost, cost by model.
 - **Latency** — one row per tool, the average wall-clock latency of its calls, sorted slowest first, with a proportional bar and the call count.
-- **Aggregates** — one row per rolling window (Day = last 24h, Week = last 7d, Month = last 30d, Year = last 365d) showing total cost, total tokens, and average tool latency for that window. A session is counted in a window when its `updated_at` falls inside it; the windows are nested, so the same session contributes to every window it is recent enough for.
-- **Projections** — two cards, **Next 7 days** and **Next 30 days**, each showing projected cost and tokens. Both extrapolate the *last 7 days* of actual consumption: a daily rate (`7d total ÷ 7`) multiplied by 7 for the week card and 30 for the month card. This is a current-pace run-rate, not a calendar forecast — it answers "if I keep going like this week, what will it cost".
+- **Aggregates** — a 2×2 card grid, one card per rolling window (Day = last 24h, Week = last 7d, Month = last 30d, Year = last 365d). Each card leads with the window's total cost (accent colour, large), a gradient bar showing that window's cost as a fraction of the largest window, and a sub-line with total tokens and average tool latency. A session is counted in a window when its `updated_at` falls inside it; the windows are nested, so the same session contributes to every window it is recent enough for. The card grid replaced an earlier flat four-row table — same numbers, more glanceable.
+- **Projections** — two cards (**Next 7 days** / **Next 30 days**) of projected cost and tokens, followed by two Swift Charts: a **cost trend** and a **token trend**. Each chart plots the last 14 days of actual daily usage as a solid accent line with a filled area, then a dashed orange line extending 7 days into the future at the projected daily rate (anchored to the last actual point so the two segments connect). Both the cards and the dashed projection extrapolate the *last 7 days* of actual consumption: a daily rate (`7d total ÷ 7`) multiplied by 7 for the week and 30 for the month. This is a current-pace run-rate, not a calendar forecast — it answers "if I keep going like this week, what will it cost".
 
 The header, tab control, and footer are shared; only the body between them swaps. The selected tab is local UI state and resets to **Cost** when the app relaunches.
 
-**Rolling-window semantics.** Aggregates and Projections use *rolling* trailing windows (last 24h / 7d / 30d / 365d), not calendar periods (today / this week / this month). A rolling window has no boundary reset: at any instant "Week" means the trailing seven days. This was a deliberate choice over calendar periods because it avoids week-start ambiguity and gives a stable, always-comparable run-rate for the projections. The per-window accumulation is a single pass in `DataStore.aggregate(_:)`: each session's cost, token total, and latency (count + `totalMs` summed across its tools) are computed once, then added into every window whose age bound (`now − updated_at ≤ windowSeconds`) the session satisfies.
+**Rolling-window semantics.** Aggregates and Projections use *rolling* trailing windows (last 24h / 7d / 30d / 365d), not calendar periods (today / this week / this month). A rolling window has no boundary reset: at any instant "Week" means the trailing seven days. This was a deliberate choice over calendar periods because it avoids week-start ambiguity and gives a stable, always-comparable run-rate for the projections. The per-window accumulation is a single pass in `DataStore.aggregate(_:)`: each session's cost, token total, and latency (count + `totalMs` summed across its tools) are computed once, then added into every window whose age bound (`now − updated_at ≤ windowSeconds`) the session satisfies. The same pass also bins each session's cost and tokens into a `dailyMap` keyed by day for the trailing 14 days; `aggregate` then emits a `[TrendPoint]` of 14 actual days followed by 7 projected days (each at the 7-day daily rate, the first anchored to the last actual point), which the Projections charts plot directly.
 
 **Tool-name aggregation.** Playwright's MCP server exposes ~25 separate tools (`mcp__playwright__browser_click`, `mcp__playwright__browser_navigate`, …). Listed individually they bury the rest of the tool list and none is individually meaningful. `ToolMetrics.normalizeToolName(_:)` collapses every `mcp__playwright__*` name to a single `mcp_playwright` row. The collapse runs in both tabs — over the hook-written per-tool counters for the Cost tab, and over the transcript-derived latency samples for the Latency tab — so the two tabs always show the same tool identities.
 
@@ -309,28 +309,37 @@ Latency tab body:
 │   Read           ██░░░░░░░   240 ms (1,204×)│
 │   ...                                    │
 
-Aggregates tab body:
+Aggregates tab body (2×2 card grid):
 ├──────────────────────────────────────────┤
-│  By period — cost · tokens · avg latency │
-│              Cost     Tokens    Latency  │
-│  Day        $182.17   51.3M      1.69s   │
-│  last 24h                                │
-│  Week     $1,484.78  581.4M      3.65s   │
-│  last 7 days                             │
-│  Month    $1,940.57  706.0M      3.70s   │
-│  last 30 days                            │
-│  Year     $1,940.57  706.0M      3.70s   │
-│  last 365 days                           │
+│  Rolling windows — cost · tokens · latency│
+│  ┌ Day    last 24h ┐ ┌ Week  last 7 days ┐│
+│  │ $215.40         │ │ $1,518.01         ││
+│  │ ▓▓░░░░░░░░       │ │ ▓▓▓▓▓▓░░░░         ││
+│  │ 62.1M · 1.63s   │ │ 592.1M · 3.60s    ││
+│  └─────────────────┘ └───────────────────┘│
+│  ┌ Month last 30 days┐ ┌ Year last 365d ┐ │
+│  │ $1,973.80          │ │ $1,973.80      │ │
+│  │ ▓▓▓▓▓▓▓▓▓▓          │ │ ▓▓▓▓▓▓▓▓▓▓      │ │
+│  │ 716.7M · 3.66s     │ │ 716.7M · 3.66s │ │
+│  └────────────────────┘ └────────────────┘ │
 
 Projections tab body:
 ├──────────────────────────────────────────┤
 │  Projected at last 7-day pace            │
 │  ┌ Next 7 days ──┐  ┌ Next 30 days ─┐   │
-│  │ $1,484.78     │  │ $6,363.34     │   │
-│  │ 581.4M tokens │  │ 2.49B tokens  │   │
+│  │ $1,518.01     │  │ $6,505.74     │   │
+│  │ 592.1M tokens │  │ 2.54B tokens  │   │
 │  └───────────────┘  └───────────────┘   │
-│  Extrapolated from your last 7 days:     │
-│  daily rate × 7 (week), × 30 (month).    │
+│  Cost trend          ● Actual ● Projected│
+│   ╱▔╲      ╱╲                            │
+│  ╱   ╲╱▔╲╱   ╲▁▁- - - - - - - - -        │  ← solid = actual, dashed = projected
+│   5/17       5/24        5/31            │
+│  Token trend         ● Actual ● Projected│
+│       ╱╲                                 │
+│  ▁▁▁╱   ╲▁▁▁- - - - - - - - - - -        │
+│   5/17       5/24        5/31            │
+│  Solid = actual daily (14d). Dashed =    │
+│  projected at last 7-day pace.           │
 ```
 
 **Refresh:** FSEvents watcher on `~/.cc-token-bar/sessions/` and `tools/`. Recompute aggregates on change. Plus a 5 s repeating timer that runs only while the popover is shown (started in `popoverDidShow`, invalidated in `popoverDidClose`). A one-shot refresh fires on every click-to-open so the panel never paints stale data.
@@ -363,7 +372,7 @@ Both scripts: no comments, no `sleep > 1`, no emojis (per project conventions).
 
 `preview.html` (sibling file) mocks the menu bar dropdown with fake data: header totals, inline SVG 7-day chart, tool-cost list. No JS libraries — pure HTML/CSS/SVG. Use this to iterate on layout before any Swift is written.
 
-**Tab screenshots for docs.** The app accepts a hidden `--snapshot <dir>` argument (`Snapshot.swift`). It boots a headless accessory `NSApplication`, lets `DataStore` load real data, then renders the Aggregates and Projections tabs offscreen (`PanelView(..., embedScroll: false)` so the content sizes to its natural height instead of scrolling) into retina PNGs via `NSHostingView.cacheDisplay`, and exits. The Cost and Latency tabs are captured manually from the live popover instead, because the Cost tab's Swift `Chart` does not render reliably offscreen. Run: `swift build && .build/debug/cc-token-bar --snapshot <repo-root>`.
+**Tab screenshots for docs.** The app accepts a hidden `--snapshot <dir>` argument (`Snapshot.swift`). It boots a headless accessory `NSApplication`, lets `DataStore` load real data, then renders the Aggregates and Projections tabs offscreen (`PanelView(..., embedScroll: false)` so the content sizes to its natural height instead of scrolling) into retina PNGs via `NSHostingView.cacheDisplay`, and exits. Swift `Chart` views *do* render correctly this way — the Projections tab's two trend charts are captured offscreen. The Cost and Latency tabs are still captured manually from the live popover, only so they keep the popover's translucent material background that an offscreen solid-colour render can't reproduce. Run: `swift build && .build/debug/cc-token-bar --snapshot <repo-root>`.
 
 ## 11. Decisions (locked) & remaining questions
 

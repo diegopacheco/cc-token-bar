@@ -130,13 +130,16 @@ final class DataStore: ObservableObject {
         let now = Date()
         let todayKey = Self.dayKey(for: now, cal: cal)
         let oneDay: TimeInterval = 86_400
+        let trendDays = 14
         let sevenDaysAgo = now.addingTimeInterval(-6 * oneDay)
+        let trendStart = now.addingTimeInterval(-Double(trendDays - 1) * oneDay)
         let windowSecs: [TimeInterval] = [oneDay, 7 * oneDay, 30 * oneDay, 365 * oneDay]
 
         var lifetime = TokenTotals()
         var today = TokenTotals()
         var byModelMap: [String: TokenTotals] = [:]
         var byDayMap: [String: (input: Int, output: Int)] = [:]
+        var dailyMap: [String: (cost: Double, tokens: Int)] = [:]
         var sessionsTodaySet: Set<String> = []
         var periodCost = [Double](repeating: 0, count: windowSecs.count)
         var periodTokens = [Int](repeating: 0, count: windowSecs.count)
@@ -190,6 +193,12 @@ final class DataStore: ObservableObject {
                     periodLatTotal[i] += sessionLatTotal
                     periodLatCount[i] += sessionLatCount
                 }
+                if when >= trendStart {
+                    var d = dailyMap[dayKey] ?? (0, 0)
+                    d.cost += sessionCost
+                    d.tokens += sessionTokens
+                    dailyMap[dayKey] = d
+                }
             }
         }
 
@@ -208,6 +217,22 @@ final class DataStore: ObservableObject {
             weeklyTokens: Int(dailyTokenRate * 7.0),
             monthlyTokens: Int(dailyTokenRate * 30.0)
         )
+
+        var trendActual: [TrendPoint] = []
+        for i in 0..<trendDays {
+            let day = cal.startOfDay(for: now.addingTimeInterval(-Double(trendDays - 1 - i) * oneDay))
+            let key = Self.dayKey(for: day, cal: cal)
+            let v = dailyMap[key] ?? (0, 0)
+            trendActual.append(TrendPoint(id: "a-\(key)", date: day, cost: v.cost, tokens: v.tokens, projected: false))
+        }
+        var trend = trendActual
+        if let last = trendActual.last {
+            trend.append(TrendPoint(id: "p-0", date: last.date, cost: last.cost, tokens: last.tokens, projected: true))
+            for j in 1...7 {
+                let day = cal.startOfDay(for: now.addingTimeInterval(Double(j) * oneDay))
+                trend.append(TrendPoint(id: "p-\(j)", date: day, cost: dailyCostRate, tokens: Int(dailyTokenRate), projected: true))
+            }
+        }
 
         let weekKeys: [String] = (0..<7).map { i in
             let d = Date().addingTimeInterval(-Double(6 - i) * oneDay)
@@ -289,6 +314,7 @@ final class DataStore: ObservableObject {
             toolLatencies: Array(toolLatencies.prefix(10)),
             periods: periods,
             projection: projection,
+            trend: trend,
             cacheHitRatio: cacheRatio,
             sessionsToday: sessionsTodaySet.count,
             sessionsLifetime: sessions.count,
