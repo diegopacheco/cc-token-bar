@@ -37,6 +37,59 @@ Six tabs — **Cost**, **Latency**, **Aggregates**, **Projections**, **Alerts**,
 
 The menu bar item itself is just a bar-chart icon + the text **`cc`** — fixed-width so it doesn't fight your other menu bar apps for space (or get eaten by the MacBook notch).
 
+All six tabs run against real Claude Code data on this machine; the Alerts and Budget shots use sample rules and a sample $500/day cap purely for illustration.
+
+### Cost tab
+
+The default view — where your tokens and dollars go. Top to bottom:
+
+- **Header KPIs** — `Today` and `All time` token counts with the running USD cost and session count. Tokens are formatted compactly (`124.2M`); cost uses monospaced digits so the column never jitters as numbers grow.
+- **Cache hit ratio** — `96.6%` in green (the threshold is 60 %; below that it turns orange). This is `cache_reads / (cache_reads + cache_writes + input)` across all sessions — the most actionable single number for spotting prompt cache regressions.
+- **Last 7 days** — stacked bar chart, input (blue) over output (orange). The one heavy day shows clearly as the tall Saturday bar.
+- **Tools by cost** — each row: tool name, gradient bar normalized to the top spender, $ cost, invocation count. Cost is estimated from `tool_input + tool_response` bytes ÷ 4, priced at the per-session weighted input rate. `Read` and `Edit` dominate the spend here.
+- **Cost by model** — every model the hook has seen, with $ and % share. Models without pricing entries (synthetic helpers, third-party adapters) show `$0.00` rather than crashing.
+
+### Latency tab
+
+The same tools, re-ranked by **average wall-clock time per call** instead of by cost — answering "what's making me wait" rather than "what's burning tokens":
+
+- **Tool latency (avg per call)** — each row: tool name, gradient bar normalized to the slowest tool, average duration, invocation count. Durations auto-format across units (`439.59s`, `590 ms`, `428 ms`) from the elapsed time the hook records between a tool firing and its `PostToolUse` event.
+- Slow orchestration tools float to the top — `mcp__repo-*` at `439.59s` over just `3×` calls, `AskUserQuestion` and `Agent` in the tens of seconds — while the high-frequency primitives sink to the bottom: `Bash` averages `5.02s` but ran `887×`, and `Edit` averages just `428 ms` across `464×`. Cost and latency rank the tool list very differently.
+
+### Aggregates tab
+
+The same cost, token, and latency numbers — but rolled up over **rolling trailing windows**, one card **per metric**:
+
+- Three cards — **Cost**, **Tokens**, **Avg latency** — each with a row for every window: **Day** = last 24h, **Week** = last 7 days, **Month** = last 30 days, **Year** = last 365 days. These are rolling windows, not calendar periods — "Week" always means the trailing seven days, with no Monday reset.
+- Within a card each row has a **gradient bar** scaled to that card's largest window, so you read the four windows against each other at a glance. A session counts toward a window when its last activity falls inside it; the windows nest, so a session three days old contributes to Week, Month, and Year but not Day.
+- Cost and tokens grow with the window (cumulative), so their bars climb Day → Year; **average latency** doesn't accumulate, so that card is a genuine side-by-side comparison — here recent calls are faster than the longer-run average. When tracked history is younger than 30 days, Month and Year read identically because both windows capture the same sessions — the honest readout, not a placeholder.
+
+### Projections tab
+
+A forward-looking run-rate built from **actual recent consumption**, with the trend drawn out as charts:
+
+- Two cards — **Next 7 days** and **Next 30 days** — each a projected **cost** and **token** count.
+- Two **trend charts**, one for cost and one for tokens. Each plots the **last 14 days of actual daily usage** as a solid blue line with a filled area, then a **dashed violet line** projecting 7 days forward at your current pace. The dashed line connects to the last real point, so you read the past and the projection as one continuous shape.
+- Everything extrapolates your *last 7 days*: a daily rate (`7-day total ÷ 7`) × 7 for the week and × 30 for the month. It's a current-pace projection, not a calendar forecast — it answers "if I keep working like I did this past week, what will it cost", and it moves as your recent usage moves.
+
+### Alerts tab
+
+Define your own thresholds and get notified when daily usage crosses them:
+
+- The **New alert** row is two dropdowns — metric (**Cost** or **Tokens**) and operator (`<`, `<=`, `=`, `>=`, `>`) — plus a number-only field and an add button. **Your alerts** below is a live list; every row is editable in place (change the metric, operator, or value) and has a trash button. Add as many as you want.
+- Rules are saved to `~/.cc-token-bar/prefs.json`. On every refresh each rule is checked against **today's** cost or token total; when it's true you get a notification banner — **once per rule per day** (a per-rule de-dup resets at midnight). The check runs whenever usage changes, so alerts fire even with the dropdown closed, as long as the app is running.
+- Banners are posted through the built-in `osascript` bridge, so they work even for this unsigned build with no permission prompt to approve (they appear under "Script Editor"). macOS's own `UserNotifications` framework refuses to register an ad-hoc-signed app, which is why this route is used.
+
+### Budget tab
+
+A visual daily spend limit:
+
+- Type a **daily budget** (numbers only) — say `$500` — and it's saved to `prefs.json`.
+- The **donut** depletes as today's cost climbs: the accent arc is the fraction used, the center shows dollars **left today**, and the caption spells out `used $X of $Y (Z%)`. Go over and the ring fills, turns red, and the center flips to the overage.
+- It resets each day, so it's a fresh limit every morning — the same daily mental model as the Alerts tab.
+
+The footer is shared by every tab: `Open data folder` reveals `~/.cc-token-bar/` in Finder so you can inspect the raw JSON; `Quit` exits cleanly (the LaunchAgent will respawn it on next login).
+
 ## Why
 
 Claude Code already writes rich usage data under `~/.claude/` — transcripts have per-message `usage.input_tokens` / `output_tokens` / `cache_*`, `.session-stats.json` has tool counts, `stats-cache.json` has daily rollups. None of it is surfaced. `cc-token-bar` reads it, prices it, and shows the totals in your menu bar.
