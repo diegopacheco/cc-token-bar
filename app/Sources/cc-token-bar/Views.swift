@@ -209,36 +209,39 @@ struct PanelView: View {
     }
 
     private var aggregationsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            sectionTitle("Rolling windows — cost · tokens · avg latency")
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10),
-                                GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                ForEach(store.agg.periods) { p in periodCard(p) }
-            }
+        let periods = store.agg.periods
+        let maxCost = periods.map(\.costUSD).max() ?? 0
+        let maxTokens = periods.map(\.tokens).max() ?? 0
+        let maxLat = periods.map(\.avgLatencyMs).max() ?? 0
+        return VStack(alignment: .leading, spacing: 12) {
+            metricCard("Cost", rows: periods.map {
+                ($0.label, maxCost > 0 ? $0.costUSD / maxCost : 0, DataStore.formatUSD($0.costUSD))
+            })
+            metricCard("Tokens", rows: periods.map {
+                ($0.label, maxTokens > 0 ? Double($0.tokens) / Double(maxTokens) : 0, DataStore.formatTokens($0.tokens))
+            })
+            metricCard("Avg latency", rows: periods.map {
+                ($0.label, maxLat > 0 ? $0.avgLatencyMs / maxLat : 0,
+                 $0.avgLatencyMs > 0 ? DataStore.formatMs($0.avgLatencyMs) : "—")
+            })
         }
         .padding(14)
     }
 
-    private func periodCard(_ p: PeriodRollup) -> some View {
-        let maxCost = store.agg.periods.map(\.costUSD).max() ?? 0
-        return VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(p.label).font(.system(size: 12, weight: .semibold))
-                Spacer()
-                Text(p.sub).font(.system(size: 9)).foregroundStyle(.secondary)
+    private func metricCard(_ title: String, rows: [(label: String, fraction: Double, value: String)]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionTitle(title)
+            ForEach(rows, id: \.label) { r in
+                HStack(spacing: 10) {
+                    Text(r.label).font(.system(size: 12, weight: .medium))
+                        .frame(width: 46, alignment: .leading)
+                    bar(fraction: r.fraction)
+                    Text(r.value).font(.system(size: 12)).monospacedDigit()
+                        .frame(width: 84, alignment: .trailing)
+                }
             }
-            Text(DataStore.formatUSD(p.costUSD))
-                .font(.system(size: 18, weight: .bold)).monospacedDigit()
-                .foregroundStyle(Color.accentColor)
-            bar(fraction: maxCost > 0 ? p.costUSD / maxCost : 0)
-            HStack(spacing: 6) {
-                Text(DataStore.formatTokens(p.tokens))
-                Text("·").foregroundStyle(.tertiary)
-                Text(p.avgLatencyMs > 0 ? DataStore.formatMs(p.avgLatencyMs) : "—")
-            }
-            .font(.system(size: 11)).foregroundStyle(.secondary).monospacedDigit()
         }
-        .padding(10)
+        .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.quaternary.opacity(0.4))
         .clipShape(RoundedRectangle(cornerRadius: 8))
@@ -280,7 +283,8 @@ struct PanelView: View {
                     .lineStyle(StrokeStyle(lineWidth: 2, dash: p.projected ? [4, 3] : []))
                     .interpolationMethod(.monotone)
             }
-            .chartForegroundStyleScale(["Actual": Color.accentColor, "Projected": Color.orange])
+            .chartForegroundStyleScale(["Actual": Color.accentColor,
+                                        "Projected": Color(red: 0.55, green: 0.36, blue: 0.96)])
             .chartLegend(position: .top, alignment: .trailing, spacing: 4)
             .chartYAxis(.hidden)
             .chartXAxis {

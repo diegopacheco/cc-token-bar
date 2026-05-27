@@ -240,8 +240,8 @@ Beyond "total tokens" and "tools by cost", here's the broader set that's cheap t
 
 - **Cost** *(default, shown on every open)* — the full metric set: Today/All-time KPIs, cache hit ratio, 7-day chart, tools by cost, cost by model.
 - **Latency** — one row per tool, the average wall-clock latency of its calls, sorted slowest first, with a proportional bar and the call count.
-- **Aggregates** — a 2×2 card grid, one card per rolling window (Day = last 24h, Week = last 7d, Month = last 30d, Year = last 365d). Each card leads with the window's total cost (accent colour, large), a gradient bar showing that window's cost as a fraction of the largest window, and a sub-line with total tokens and average tool latency. A session is counted in a window when its `updated_at` falls inside it; the windows are nested, so the same session contributes to every window it is recent enough for. The card grid replaced an earlier flat four-row table — same numbers, more glanceable.
-- **Projections** — two cards (**Next 7 days** / **Next 30 days**) of projected cost and tokens, followed by two Swift Charts: a **cost trend** and a **token trend**. Each chart plots the last 14 days of actual daily usage as a solid accent line with a filled area, then a dashed orange line extending 7 days into the future at the projected daily rate (anchored to the last actual point so the two segments connect). Both the cards and the dashed projection extrapolate the *last 7 days* of actual consumption: a daily rate (`7d total ÷ 7`) multiplied by 7 for the week and 30 for the month. This is a current-pace run-rate, not a calendar forecast — it answers "if I keep going like this week, what will it cost".
+- **Aggregates** — three cards, one **per metric**: Cost, Tokens, and Avg latency. Each card has a row for every rolling window (Day = last 24h, Week = last 7d, Month = last 30d, Year = last 365d) with a gradient bar scaled to that card's largest window plus the value. Splitting by metric (rather than the earlier one-card-per-window grid, which mixed dollars, tokens, and seconds on a single card) keeps each card comparing like with like. A session is counted in a window when its `updated_at` falls inside it; the windows are nested, so the same session contributes to every window it is recent enough for. Cost and tokens are cumulative (bars climb Day → Year); average latency is not, so that card is a true side-by-side comparison.
+- **Projections** — two cards (**Next 7 days** / **Next 30 days**) of projected cost and tokens, followed by two Swift Charts: a **cost trend** and a **token trend**. Each chart plots the last 14 days of actual daily usage as a solid accent line with a filled area, then a dashed violet line extending 7 days into the future at the projected daily rate (anchored to the last actual point so the two segments connect). Both the cards and the dashed projection extrapolate the *last 7 days* of actual consumption: a daily rate (`7d total ÷ 7`) multiplied by 7 for the week and 30 for the month. This is a current-pace run-rate, not a calendar forecast — it answers "if I keep going like this week, what will it cost".
 
 The header, tab control, and footer are shared; only the body between them swaps. The selected tab is local UI state and resets to **Cost** when the app relaunches.
 
@@ -309,26 +309,30 @@ Latency tab body:
 │   Read           ██░░░░░░░   240 ms (1,204×)│
 │   ...                                    │
 
-Aggregates tab body (2×2 card grid):
+Aggregates tab body (one card per metric):
 ├──────────────────────────────────────────┤
-│  Rolling windows — cost · tokens · latency│
-│  ┌ Day    last 24h ┐ ┌ Week  last 7 days ┐│
-│  │ $215.40         │ │ $1,518.01         ││
-│  │ ▓▓░░░░░░░░       │ │ ▓▓▓▓▓▓░░░░         ││
-│  │ 62.1M · 1.63s   │ │ 592.1M · 3.60s    ││
-│  └─────────────────┘ └───────────────────┘│
-│  ┌ Month last 30 days┐ ┌ Year last 365d ┐ │
-│  │ $1,973.80          │ │ $1,973.80      │ │
-│  │ ▓▓▓▓▓▓▓▓▓▓          │ │ ▓▓▓▓▓▓▓▓▓▓      │ │
-│  │ 716.7M · 3.66s     │ │ 716.7M · 3.66s │ │
-│  └────────────────────┘ └────────────────┘ │
+│  COST                                     │
+│   Day    ▓▓░░░░░░░░        $234.70        │
+│   Week   ▓▓▓▓▓▓░░░░      $1,537.30        │
+│   Month  ▓▓▓▓▓▓▓▓▓▓      $1,993.09        │
+│   Year   ▓▓▓▓▓▓▓▓▓▓      $1,993.09        │
+│  TOKENS                                   │
+│   Day    ▓░░░░░░░░░          67.1M        │
+│   Week   ▓▓▓▓▓▓▓░░░         597.1M        │
+│   Month  ▓▓▓▓▓▓▓▓▓▓         721.7M        │
+│   Year   ▓▓▓▓▓▓▓▓▓▓         721.7M        │
+│  AVG LATENCY                              │
+│   Day    ▓▓▓░░░░░░░          1.60s        │
+│   Week   ▓▓▓▓▓▓▓▓▓░          3.58s        │
+│   Month  ▓▓▓▓▓▓▓▓▓▓          3.65s        │
+│   Year   ▓▓▓▓▓▓▓▓▓▓          3.65s        │
 
 Projections tab body:
 ├──────────────────────────────────────────┤
 │  Projected at last 7-day pace            │
 │  ┌ Next 7 days ──┐  ┌ Next 30 days ─┐   │
-│  │ $1,518.01     │  │ $6,505.74     │   │
-│  │ 592.1M tokens │  │ 2.54B tokens  │   │
+│  │ $1,537.30     │  │ $6,588.43     │   │
+│  │ 597.1M tokens │  │ 2.56B tokens  │   │
 │  └───────────────┘  └───────────────┘   │
 │  Cost trend          ● Actual ● Projected│
 │   ╱▔╲      ╱╲                            │

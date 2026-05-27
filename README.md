@@ -6,20 +6,18 @@
 
 A native macOS menu bar app that surfaces Claude Code token usage, cost, and tool-by-tool breakdown — fed by hooks Claude Code already calls into. All data stays local.
 
-```
-                              ┌──────────────────────────────┐
-   ░▒▓ chart.bar.xaxis  cc    │  ← lives here, always tiny    │
-                              └──────────────────────────────┘
-                                              │
-                                              ▼  (click)
-                              ┌──────────────────────────────┐
-                              │  Today · All-time KPIs       │
-                              │  Cache hit ratio (hero #)    │
-                              │  7-day input/output chart    │
-                              │  Tools by cost               │
-                              │  Cost by model               │
-                              └──────────────────────────────┘
-```
+<div align="center">
+<table>
+  <tr>
+    <td align="center"><img src="./screenshot-cost.png" width="260" /><br/><b>Cost</b></td>
+    <td align="center"><img src="./screenshot-latency.png" width="260" /><br/><b>Latency</b></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="./screenshot-aggregates.png" width="260" /><br/><b>Aggregates</b></td>
+    <td align="center"><img src="./screenshot-projections.png" width="260" /><br/><b>Projections</b></td>
+  </tr>
+</table>
+</div>
 
 ## What it shows
 
@@ -179,11 +177,9 @@ Full design — including data sources, metrics catalog, attribution model, and 
 
 ## Result
 
-The dropdown has four tabs — **Cost**, **Latency**, **Aggregates**, and **Projections** — switched by the segmented control under the title. Every screenshot below runs against real Claude Code data on this machine: 88 sessions, 96.6 % cache hit ratio.
+The dropdown has four tabs — **Cost**, **Latency**, **Aggregates**, and **Projections** — switched by the segmented control under the title (see the four screenshots at the top of this README). All of them run against real Claude Code data on this machine: 88 sessions, 96.6 % cache hit ratio.
 
 ### Cost tab
-
-![cc-token-bar Cost tab](./screenshot-cost.png)
 
 The default view — where your tokens and dollars go. Top to bottom:
 
@@ -195,8 +191,6 @@ The default view — where your tokens and dollars go. Top to bottom:
 
 ### Latency tab
 
-![cc-token-bar Latency tab](./screenshot-latency.png)
-
 The same tools, re-ranked by **average wall-clock time per call** instead of by cost — answering "what's making me wait" rather than "what's burning tokens":
 
 - **Tool latency (avg per call)** — each row: tool name, gradient bar normalized to the slowest tool, average duration, invocation count. Durations auto-format across units (`439.59s`, `590 ms`, `428 ms`) from the elapsed time the hook records between a tool firing and its `PostToolUse` event.
@@ -204,22 +198,19 @@ The same tools, re-ranked by **average wall-clock time per call** instead of by 
 
 ### Aggregates tab
 
-![cc-token-bar Aggregates tab](./screenshot-aggregates.png)
+The same cost, token, and latency numbers — but rolled up over **rolling trailing windows**, one card **per metric**:
 
-The same cost, token, and latency numbers — but rolled up over **rolling trailing windows**, as a 2×2 card grid:
-
-- One card per window: **Day** = last 24h, **Week** = last 7 days, **Month** = last 30 days, **Year** = last 365 days. These are rolling windows, not calendar periods — "Week" always means the trailing seven days, with no Monday reset.
-- Each card leads with that window's **cost** (large, in accent blue), a **gradient bar** showing its cost as a fraction of the largest window, and a sub-line with **total tokens** and **average tool latency**. A session counts toward a window when its last activity falls inside it; the windows nest, so a session three days old contributes to Week, Month, and Year but not Day.
-- In the shot above Month and Year are identical (`$1,973.80`, `716.7M`, `3.66s` — both bars full) because this machine's tracked history is younger than 30 days — there are no sessions older than a month yet, so both windows capture the same set. That's the honest readout, not a placeholder.
+- Three cards — **Cost**, **Tokens**, **Avg latency** — each with a row for every window: **Day** = last 24h, **Week** = last 7 days, **Month** = last 30 days, **Year** = last 365 days. These are rolling windows, not calendar periods — "Week" always means the trailing seven days, with no Monday reset.
+- Within a card each row has a **gradient bar** scaled to that card's largest window, so you read the four windows against each other at a glance. A session counts toward a window when its last activity falls inside it; the windows nest, so a session three days old contributes to Week, Month, and Year but not Day.
+- In the shot above Month and Year are identical in every card (`$1,993.09`, `721.7M`, `3.65s`) because this machine's tracked history is younger than 30 days — there are no sessions older than a month yet, so both windows capture the same set. That's the honest readout, not a placeholder.
+- Cost and tokens grow with the window (cumulative), so their bars climb Day → Year; **average latency** doesn't accumulate, so that card is a genuine side-by-side comparison — here recent calls (`1.60s` today) are faster than the longer-run average (`3.65s`).
 
 ### Projections tab
 
-![cc-token-bar Projections tab](./screenshot-projections.png)
-
 A forward-looking run-rate built from **actual recent consumption**, with the trend drawn out as charts:
 
-- Two cards — **Next 7 days** (`$1,518.01` / `592.1M` tokens) and **Next 30 days** (`$6,505.74` / `2.54B` tokens) — each a projected **cost** and **token** count.
-- Two **trend charts**, one for cost and one for tokens. Each plots the **last 14 days of actual daily usage** as a solid blue line with a filled area, then a **dashed orange line** projecting 7 days forward at your current pace. The dashed line connects to the last real point, so you read the past and the projection as one continuous shape.
+- Two cards — **Next 7 days** (`$1,537.30` / `597.1M` tokens) and **Next 30 days** (`$6,588.43` / `2.56B` tokens) — each a projected **cost** and **token** count.
+- Two **trend charts**, one for cost and one for tokens. Each plots the **last 14 days of actual daily usage** as a solid blue line with a filled area, then a **dashed violet line** projecting 7 days forward at your current pace. The dashed line connects to the last real point, so you read the past and the projection as one continuous shape.
 - Everything extrapolates your *last 7 days*: a daily rate (`7-day total ÷ 7`) × 7 for the week and × 30 for the month. It's a current-pace projection, not a calendar forecast — it answers "if I keep working like I did this past week, what will it cost", and it moves as your recent usage moves.
 
 The footer is shared by every tab: `Open data folder` reveals `~/.cc-token-bar/` in Finder so you can inspect the raw JSON; `Quit` exits cleanly (the LaunchAgent will respawn it on next login).
