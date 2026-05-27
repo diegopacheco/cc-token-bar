@@ -9,14 +9,14 @@ A native macOS menu bar app that surfaces Claude Code token usage, cost, and too
 <div align="center">
 <table>
   <tr>
-    <td align="center"><img src="./screenshot-cost.png" width="220" /><br/><b>Cost</b></td>
-    <td align="center"><img src="./screenshot-latency.png" width="220" /><br/><b>Latency</b></td>
-    <td align="center"><img src="./screenshot-aggregates.png" width="220" /><br/><b>Aggregates</b></td>
+    <td align="center"><b>Cost</b><br/><img src="./screenshot-cost.png" width="220" /></td>
+    <td align="center"><b>Latency</b><br/><img src="./screenshot-latency.png" width="220" /></td>
+    <td align="center"><b>Aggregates</b><br/><img src="./screenshot-aggregates.png" width="220" /></td>
   </tr>
   <tr>
-    <td align="center"><img src="./screenshot-projections.png" width="220" /><br/><b>Projections</b></td>
-    <td align="center"><img src="./screenshot-alerts.png" width="220" /><br/><b>Alerts</b></td>
-    <td align="center"><img src="./screenshot-budget.png" width="220" /><br/><b>Budget</b></td>
+    <td align="center"><b>Projections</b><br/><img src="./screenshot-projections.png" width="220" /></td>
+    <td align="center"><b>Alerts</b><br/><img src="./screenshot-alerts.png" width="220" /></td>
+    <td align="center"><b>Budget</b><br/><img src="./screenshot-budget.png" width="220" /></td>
   </tr>
 </table>
 </div>

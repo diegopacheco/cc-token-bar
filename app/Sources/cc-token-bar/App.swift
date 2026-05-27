@@ -24,7 +24,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         NSApp.setActivationPolicy(.accessory)
         let dataDir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".cc-token-bar")
         notifier = AlertNotifier(dataDir: dataDir)
-        notifier.requestAuthorization()
         store.onAgg = { [weak self] agg in
             guard let self = self else { return }
             self.notifier.evaluate(agg: agg, alerts: self.prefs.alerts)
