@@ -1,0 +1,64 @@
+design-doc.md
+  s_f26f23a515e2d4::t_fa1f0147760089 249-250
+  s_f26f23a515e2d4::t_837cd4f1ebc646 421,424-426
+  s_f26f23a515e2d4::t_48da544b19a22b 354-374
+  s_f26f23a515e2d4::t_2e313004c8afc9 17-18,20
+  s_f26f23a515e2d4::t_2ca6b335b3aa4a 243
+  s_f26f23a515e2d4::t_1aa397fd5b94ee 292-293
+  s_f26f23a515e2d4::t_84c3b05206d2bb 407
+  s_f26f23a515e2d4::t_ea8b965783718d 132-134
+app/Sources/cc-token-bar/DataStore.swift
+  s_f26f23a515e2d4::t_149fc381c0d5ac 71
+  s_f26f23a515e2d4::t_2833e60809e0ad 7
+app/Sources/cc-token-bar/Prefs.swift
+  s_f26f23a515e2d4::t_eb889965feca63 1-19,21-37,39-42,44-47,49-67,69-82
+  s_f26f23a515e2d4::t_b4be62c1e5ecea 38,43,48
+  s_f26f23a515e2d4::t_654d82297de721 68
+  s_f26f23a515e2d4::t_520712b5789f40 20
+app/Sources/cc-token-bar/App.swift
+  s_f26f23a515e2d4::t_030c725f9b4b52 4-8
+  s_f26f23a515e2d4::t_a94d1cf317b7c2 51
+  s_f26f23a515e2d4::t_cfb4f3498f0fc0 75
+  s_f26f23a515e2d4::t_629ba7807d7193 111
+  s_f26f23a515e2d4::t_2f30a754c2174e 112
+  s_f26f23a515e2d4::t_5003bdfebc9a46 15-16
+  s_f26f23a515e2d4::t_86ab8ea5d7db47 25-31
+app/Sources/cc-token-bar/Snapshot.swift
+  s_f26f23a515e2d4::t_6ba3bbbcaa74ac 11-13
+  s_f26f23a515e2d4::t_b1ebdb99e91501 10,14,18-19,21-23,26,33-34
+app/Sources/cc-token-bar/Views.swift
+  s_f26f23a515e2d4::t_ef56972c7043fd 75-81,83-99
+  s_f26f23a515e2d4::t_d1dda0043d518d 327-436
+  s_f26f23a515e2d4::t_3d2073dd1865e8 10-11
+  s_f26f23a515e2d4::t_fc4320853ee829 18-20
+  s_f26f23a515e2d4::t_e434615e5b132d 16,23,25
+  s_f26f23a515e2d4::t_4c726d42b7e459 62-65
+app/Sources/cc-token-bar/Notifier.swift
+  s_f26f23a515e2d4::t_ba631d9d2425f8 35
+  s_f26f23a515e2d4::t_ea6d7809b0b7ee 21
+  s_f26f23a515e2d4::t_47ce3659ffee52 1-20,22-34,36-51
+README.md
+  s_f26f23a515e2d4::t_009a4c9ae34ec9 147-148
+  s_f26f23a515e2d4::t_215b1d3d822ba1 191
+  s_f26f23a515e2d4::t_9cb31e7f1646ec 12-13,16-21
+  s_f26f23a515e2d4::t_c4549b8fb6beec 227-242
+  s_f26f23a515e2d4::t_4c237d84b97cd2 154
+  s_f26f23a515e2d4::t_09e383404f6226 179-180,182
+  s_f26f23a515e2d4::t_545620c7534010 35-36,38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "2ccf3c14850b43889593a36bef1d00ae2cdd409e",
+  "prompts": {},
+  "sessions": {
+    "s_f26f23a515e2d4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "09adbae6-f21a-403a-a388-44a0a3589e29",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "diegopacheco <diego.pacheco.it@gmail.com>"
+    }
+  }
+}
