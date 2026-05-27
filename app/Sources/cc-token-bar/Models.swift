@@ -77,6 +77,22 @@ struct ToolLatency: Identifiable, Equatable {
     let totalMs: Double
 }
 
+struct PeriodRollup: Identifiable, Equatable {
+    var id: String { label }
+    let label: String
+    let sub: String
+    let costUSD: Double
+    let tokens: Int
+    let avgLatencyMs: Double
+}
+
+struct Projection: Equatable {
+    var weeklyCost: Double = 0
+    var monthlyCost: Double = 0
+    var weeklyTokens: Int = 0
+    var monthlyTokens: Int = 0
+}
+
 struct Aggregates: Equatable {
     var today: TokenTotals = TokenTotals()
     var lifetime: TokenTotals = TokenTotals()
@@ -84,6 +100,8 @@ struct Aggregates: Equatable {
     var byDay: [DayBucket] = []
     var tools: [ToolStat] = []
     var toolLatencies: [ToolLatency] = []
+    var periods: [PeriodRollup] = []
+    var projection: Projection = Projection()
     var cacheHitRatio: Double = 0
     var sessionsToday: Int = 0
     var sessionsLifetime: Int = 0
@@ -93,6 +111,8 @@ struct Aggregates: Equatable {
         lhs.today == rhs.today && lhs.lifetime == rhs.lifetime
             && lhs.byDay == rhs.byDay && lhs.tools == rhs.tools
             && lhs.toolLatencies == rhs.toolLatencies
+            && lhs.periods == rhs.periods
+            && lhs.projection == rhs.projection
             && lhs.cacheHitRatio == rhs.cacheHitRatio
             && lhs.sessionsToday == rhs.sessionsToday
             && lhs.sessionsLifetime == rhs.sessionsLifetime

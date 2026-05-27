@@ -5,43 +5,67 @@ import AppKit
 enum PanelTab: Hashable {
     case cost
     case latency
+    case aggregations
+    case projections
 }
 
 struct PanelView: View {
     @ObservedObject var store: DataStore
-    @State private var tab: PanelTab = .cost
+    @State private var tab: PanelTab
+    private let embedScroll: Bool
+
+    init(store: DataStore, initialTab: PanelTab = .cost, embedScroll: Bool = true) {
+        self.store = store
+        self._tab = State(initialValue: initialTab)
+        self.embedScroll = embedScroll
+    }
 
     var body: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 0) {
-                header
-                tabBar
-                if tab == .cost {
-                    kpiSection
-                    divider
-                    cacheSection
-                    divider
-                    chartSection
-                    divider
-                    toolsSection
-                    divider
-                    modelsSection
-                } else {
-                    latencySection
-                }
-                footer
+        Group {
+            if embedScroll {
+                ScrollView(.vertical, showsIndicators: false) { content }
+            } else {
+                content
             }
-            .padding(.top, 12)
-            .padding(.bottom, 8)
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(width: 360)
+    }
+
+    private var content: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            header
+            tabBar
+            switch tab {
+            case .cost:
+                kpiSection
+                divider
+                cacheSection
+                divider
+                chartSection
+                divider
+                toolsSection
+                divider
+                modelsSection
+            case .latency:
+                latencySection
+            case .aggregations:
+                aggregationsSection
+            case .projections:
+                projectionsSection
+            }
+            footer
+        }
+        .padding(.top, 12)
+        .padding(.bottom, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var tabBar: some View {
         Picker("", selection: $tab) {
             Text("Cost").tag(PanelTab.cost)
             Text("Latency").tag(PanelTab.latency)
+            Text("Aggregates").tag(PanelTab.aggregations)
+            Text("Projections").tag(PanelTab.projections)
         }
         .pickerStyle(.segmented)
         .labelsHidden()
@@ -179,6 +203,59 @@ struct PanelView: View {
                     }
                     .padding(.vertical, 3)
                 }
+            }
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+    }
+
+    private var aggregationsSection: some View {
+        periodsSection
+    }
+
+    private var projectionsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionTitle("Projected at last 7-day pace")
+            HStack(spacing: 10) {
+                kpi(title: "Next 7 days",
+                    value: DataStore.formatUSD(store.agg.projection.weeklyCost),
+                    sub: "\(DataStore.formatTokens(store.agg.projection.weeklyTokens)) tokens")
+                kpi(title: "Next 30 days",
+                    value: DataStore.formatUSD(store.agg.projection.monthlyCost),
+                    sub: "\(DataStore.formatTokens(store.agg.projection.monthlyTokens)) tokens")
+            }
+            Text("Extrapolated from your last 7 days of usage: daily rate × 7 for the week, × 30 for the month.")
+                .font(.system(size: 11)).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(14)
+    }
+
+    private var periodsSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            sectionTitle("By period — cost · tokens · avg latency")
+            HStack(spacing: 8) {
+                Text("").frame(width: 72, alignment: .leading)
+                Text("Cost").frame(maxWidth: .infinity, alignment: .trailing)
+                Text("Tokens").frame(maxWidth: .infinity, alignment: .trailing)
+                Text("Latency").frame(maxWidth: .infinity, alignment: .trailing)
+            }
+            .font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
+            ForEach(store.agg.periods) { p in
+                HStack(spacing: 8) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(p.label).font(.system(size: 12, weight: .medium))
+                        Text(p.sub).font(.system(size: 9)).foregroundStyle(.secondary)
+                    }
+                    .frame(width: 72, alignment: .leading)
+                    Text(DataStore.formatUSD(p.costUSD))
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                    Text(DataStore.formatTokens(p.tokens))
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                    Text(p.avgLatencyMs > 0 ? DataStore.formatMs(p.avgLatencyMs) : "—")
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+                .font(.system(size: 12)).monospacedDigit()
+                .padding(.vertical, 3)
             }
         }
         .padding(.horizontal, 14).padding(.vertical, 10)

@@ -28,6 +28,10 @@ A native macOS menu bar app that surfaces Claude Code token usage, cost, and too
 - **Last 7 days** — stacked bar chart of input vs output tokens.
 - **Tools by cost** — Read / Edit / Bash / Task / WebFetch ranked by estimated $.
 - **Cost by model** — Opus vs Sonnet vs Haiku breakdown with % share.
+- **Aggregates** — cost, tokens, and average tool latency rolled up over rolling windows: last 24h, 7d, 30d, 365d.
+- **Projections** — next-7-day and next-30-day cost and token estimates, extrapolated from your last 7 days of usage.
+
+Four tabs — **Cost**, **Latency**, **Aggregates**, **Projections** — switch the dropdown body via the segmented control under the title.
 
 The menu bar item itself is just a bar-chart icon + the text **`cc`** — fixed-width so it doesn't fight your other menu bar apps for space (or get eaten by the MacBook notch).
 
@@ -165,7 +169,8 @@ cc-token-bar/
         ├── Pricing.swift                  per-million pricing + prefix model match
         ├── DataStore.swift                ObservableObject, scans + aggregates
         ├── FSWatcher.swift                CoreServices FSEvents wrapper
-        └── Views.swift                    SwiftUI PanelView (KPIs, chart, tools, models)
+        ├── Snapshot.swift                 --snapshot mode: render tabs to PNG for docs
+        └── Views.swift                    SwiftUI PanelView (4 tabs: cost, latency, aggregates, projections)
 ```
 
 ## Design
@@ -174,7 +179,7 @@ Full design — including data sources, metrics catalog, attribution model, and 
 
 ## Result
 
-The dropdown has two tabs — **Cost** and **Latency** — switched by the segmented control under the title. Both screenshots below run against real Claude Code data on this machine: 87 sessions, 96.6 % cache hit ratio.
+The dropdown has four tabs — **Cost**, **Latency**, **Aggregates**, and **Projections** — switched by the segmented control under the title. Every screenshot below runs against real Claude Code data on this machine: 88 sessions, 96.6 % cache hit ratio.
 
 ### Cost tab
 
@@ -197,4 +202,24 @@ The same tools, re-ranked by **average wall-clock time per call** instead of by 
 - **Tool latency (avg per call)** — each row: tool name, gradient bar normalized to the slowest tool, average duration, invocation count. Durations auto-format across units (`439.59s`, `590 ms`, `428 ms`) from the elapsed time the hook records between a tool firing and its `PostToolUse` event.
 - Slow orchestration tools float to the top — `mcp__repo-*` at `439.59s` over just `3×` calls, `AskUserQuestion` and `Agent` in the tens of seconds — while the high-frequency primitives sink to the bottom: `Bash` averages `5.02s` but ran `887×`, and `Edit` averages just `428 ms` across `464×`. Cost and latency rank the tool list very differently.
 
-The footer is shared by both tabs: `Open data folder` reveals `~/.cc-token-bar/` in Finder so you can inspect the raw JSON; `Quit` exits cleanly (the LaunchAgent will respawn it on next login).
+### Aggregates tab
+
+![cc-token-bar Aggregates tab](./screenshot-aggregates.png)
+
+The same cost, token, and latency numbers — but rolled up over **rolling trailing windows** instead of all-time. One row per window:
+
+- **Day** = last 24h, **Week** = last 7 days, **Month** = last 30 days, **Year** = last 365 days. These are rolling windows, not calendar periods — "Week" always means the trailing seven days, with no Monday reset.
+- Each row shows **total cost**, **total tokens**, and **average tool latency** for that window. A session counts toward a window when its last activity falls inside it; the windows nest, so a session three days old contributes to Week, Month, and Year but not Day.
+- In the shot above Month and Year are identical (`$1,940.57`, `706.0M`, `3.70s`) because this machine's tracked history is younger than 30 days — there simply are no sessions older than a month yet, so both windows capture the same set. That's the honest readout, not a placeholder.
+
+### Projections tab
+
+![cc-token-bar Projections tab](./screenshot-projections.png)
+
+A forward-looking run-rate built from **actual recent consumption**:
+
+- Two cards — **Next 7 days** and **Next 30 days** — each with a projected **cost** and **token** count.
+- Both extrapolate your *last 7 days*: a daily rate (`7-day total ÷ 7`) multiplied by 7 for the week card and 30 for the month card. At this machine's pace that's `$1,484.78` / `581.4M` tokens for the coming week and `$6,363.34` / `2.49B` tokens for the coming month.
+- It's a current-pace projection, not a calendar forecast — it answers "if I keep working like I did this past week, what will it cost", and it moves as your recent usage moves.
+
+The footer is shared by every tab: `Open data folder` reveals `~/.cc-token-bar/` in Finder so you can inspect the raw JSON; `Quit` exits cleanly (the LaunchAgent will respawn it on next login).

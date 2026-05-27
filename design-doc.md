@@ -12,8 +12,10 @@ Give a Claude Code user a permanently visible, glanceable readout of:
 - Token usage over time (week, all time) as a chart.
 - Cost per tool, listed and sorted.
 - Latency per tool call, listed and sorted.
+- Cost, tokens, and average latency rolled up over rolling time windows (24h / 7d / 30d / 365d).
+- Forward cost and token projections based on recent consumption pace.
 
-The dropdown is split into two tabs: **Cost** (default) and **Latency**.
+The dropdown is split into four tabs: **Cost** (default), **Latency**, **Aggregates**, and **Projections**.
 
 Data is captured locally via Claude Code hooks and stored as JSON under `~/.cc-token-bar/`. Nothing leaves the machine.
 
@@ -234,12 +236,16 @@ Beyond "total tokens" and "tools by cost", here's the broader set that's cheap t
 
 **Menu bar item:** fixed-width identifier — a bar-chart SF Symbol followed by the literal text `cc`. The label is intentionally static to minimise menu bar real estate and survive crowded notch layouts on MacBooks. All dynamic numbers live inside the dropdown.
 
-**Tabs.** Directly under the header a segmented control switches the panel body between two tabs (`PanelView.tab`, a `@State PanelTab`):
+**Tabs.** Directly under the header a segmented control switches the panel body between four tabs (`PanelView.tab`, a `@State PanelTab`):
 
 - **Cost** *(default, shown on every open)* — the full metric set: Today/All-time KPIs, cache hit ratio, 7-day chart, tools by cost, cost by model.
 - **Latency** — one row per tool, the average wall-clock latency of its calls, sorted slowest first, with a proportional bar and the call count.
+- **Aggregates** — one row per rolling window (Day = last 24h, Week = last 7d, Month = last 30d, Year = last 365d) showing total cost, total tokens, and average tool latency for that window. A session is counted in a window when its `updated_at` falls inside it; the windows are nested, so the same session contributes to every window it is recent enough for.
+- **Projections** — two cards, **Next 7 days** and **Next 30 days**, each showing projected cost and tokens. Both extrapolate the *last 7 days* of actual consumption: a daily rate (`7d total ÷ 7`) multiplied by 7 for the week card and 30 for the month card. This is a current-pace run-rate, not a calendar forecast — it answers "if I keep going like this week, what will it cost".
 
 The header, tab control, and footer are shared; only the body between them swaps. The selected tab is local UI state and resets to **Cost** when the app relaunches.
+
+**Rolling-window semantics.** Aggregates and Projections use *rolling* trailing windows (last 24h / 7d / 30d / 365d), not calendar periods (today / this week / this month). A rolling window has no boundary reset: at any instant "Week" means the trailing seven days. This was a deliberate choice over calendar periods because it avoids week-start ambiguity and gives a stable, always-comparable run-rate for the projections. The per-window accumulation is a single pass in `DataStore.aggregate(_:)`: each session's cost, token total, and latency (count + `totalMs` summed across its tools) are computed once, then added into every window whose age bound (`now − updated_at ≤ windowSeconds`) the session satisfies.
 
 **Tool-name aggregation.** Playwright's MCP server exposes ~25 separate tools (`mcp__playwright__browser_click`, `mcp__playwright__browser_navigate`, …). Listed individually they bury the rest of the tool list and none is individually meaningful. `ToolMetrics.normalizeToolName(_:)` collapses every `mcp__playwright__*` name to a single `mcp_playwright` row. The collapse runs in both tabs — over the hook-written per-tool counters for the Cost tab, and over the transcript-derived latency samples for the Latency tab — so the two tabs always show the same tool identities.
 
@@ -277,7 +283,7 @@ Click opens this panel:
 ┌──────────────────────────────────────────┐
 │  cc-token-bar                          ✕  │
 ├──────────────────────────────────────────┤
-│  [   Cost   ] [  Latency  ]              │  ← segmented tab control
+│ [ Cost ][ Latency ][Aggregates][Projections]│  ← segmented tab control
 ├──────────────────────────────────────────┤
 │  Today        412,103 tokens   $1.84     │   Cost tab (default)
 │  All-time   8,910,442 tokens  $42.17     │
@@ -302,6 +308,29 @@ Latency tab body:
 │   Bash           █████░░░░  1.60s  (  192×)│
 │   Read           ██░░░░░░░   240 ms (1,204×)│
 │   ...                                    │
+
+Aggregates tab body:
+├──────────────────────────────────────────┤
+│  By period — cost · tokens · avg latency │
+│              Cost     Tokens    Latency  │
+│  Day        $182.17   51.3M      1.69s   │
+│  last 24h                                │
+│  Week     $1,484.78  581.4M      3.65s   │
+│  last 7 days                             │
+│  Month    $1,940.57  706.0M      3.70s   │
+│  last 30 days                            │
+│  Year     $1,940.57  706.0M      3.70s   │
+│  last 365 days                           │
+
+Projections tab body:
+├──────────────────────────────────────────┤
+│  Projected at last 7-day pace            │
+│  ┌ Next 7 days ──┐  ┌ Next 30 days ─┐   │
+│  │ $1,484.78     │  │ $6,363.34     │   │
+│  │ 581.4M tokens │  │ 2.49B tokens  │   │
+│  └───────────────┘  └───────────────┘   │
+│  Extrapolated from your last 7 days:     │
+│  daily rate × 7 (week), × 30 (month).    │
 ```
 
 **Refresh:** FSEvents watcher on `~/.cc-token-bar/sessions/` and `tools/`. Recompute aggregates on change. Plus a 5 s repeating timer that runs only while the popover is shown (started in `popoverDidShow`, invalidated in `popoverDidClose`). A one-shot refresh fires on every click-to-open so the panel never paints stale data.
@@ -334,6 +363,8 @@ Both scripts: no comments, no `sleep > 1`, no emojis (per project conventions).
 
 `preview.html` (sibling file) mocks the menu bar dropdown with fake data: header totals, inline SVG 7-day chart, tool-cost list. No JS libraries — pure HTML/CSS/SVG. Use this to iterate on layout before any Swift is written.
 
+**Tab screenshots for docs.** The app accepts a hidden `--snapshot <dir>` argument (`Snapshot.swift`). It boots a headless accessory `NSApplication`, lets `DataStore` load real data, then renders the Aggregates and Projections tabs offscreen (`PanelView(..., embedScroll: false)` so the content sizes to its natural height instead of scrolling) into retina PNGs via `NSHostingView.cacheDisplay`, and exits. The Cost and Latency tabs are captured manually from the live popover instead, because the Cost tab's Swift `Chart` does not render reliably offscreen. Run: `swift build && .build/debug/cc-token-bar --snapshot <repo-root>`.
+
 ## 11. Decisions (locked) & remaining questions
 
 ### Locked
@@ -346,7 +377,9 @@ Both scripts: no comments, no `sleep > 1`, no emojis (per project conventions).
 | 4 | Hook                   | Ship the hook, mark optional in `install.sh`. App falls back to FSEvents-only if hook not installed       |
 | 5 | v1 metric set          | Today + lifetime header · 7-day stacked chart · tools by cost · cache hit ratio · cost by model split     |
 | 6 | Backfill on install    | Yes — scan all existing `~/.claude/projects/**/*.jsonl` and seed `index.json`                             |
-| 7 | Panel tabs             | Two tabs: **Cost** (default, the v1 metric set) and **Latency** (avg latency per tool). Shared header/footer |
+| 7 | Panel tabs             | Four tabs: **Cost** (default, the v1 metric set), **Latency** (avg latency per tool), **Aggregates** (cost/tokens/avg latency over rolling 24h/7d/30d/365d windows), **Projections** (next-7-day and next-30-day cost & token run-rate from the last 7 days). Shared header/footer |
+| 10 | Window semantics      | Rolling trailing windows (last 24h / 7d / 30d / 365d), not calendar periods. Avoids week-start ambiguity; gives a stable run-rate for projections |
+| 11 | Projection basis      | Last 7 days of actual consumption → daily rate (`7d ÷ 7`) × 7 for the week, × 30 for the month. Current-pace run-rate, not a calendar forecast |
 | 8 | Playwright tools       | Collapse all `mcp__playwright__*` to one `mcp_playwright` row in both tabs                                 |
 | 9 | Latency source         | Transcript `tool_use`→`tool_result` timestamp delta; no hook changes                                      |
 

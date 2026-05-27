@@ -127,15 +127,21 @@ final class DataStore: ObservableObject {
 
     private func aggregate(sessions: [SessionFile], tools: [ToolsFile], pricing: [String: PriceTier]) -> Aggregates {
         let cal = Calendar(identifier: .gregorian)
-        let todayKey = Self.dayKey(for: Date(), cal: cal)
+        let now = Date()
+        let todayKey = Self.dayKey(for: now, cal: cal)
         let oneDay: TimeInterval = 86_400
-        let sevenDaysAgo = Date().addingTimeInterval(-6 * oneDay)
+        let sevenDaysAgo = now.addingTimeInterval(-6 * oneDay)
+        let windowSecs: [TimeInterval] = [oneDay, 7 * oneDay, 30 * oneDay, 365 * oneDay]
 
         var lifetime = TokenTotals()
         var today = TokenTotals()
         var byModelMap: [String: TokenTotals] = [:]
         var byDayMap: [String: (input: Int, output: Int)] = [:]
         var sessionsTodaySet: Set<String> = []
+        var periodCost = [Double](repeating: 0, count: windowSecs.count)
+        var periodTokens = [Int](repeating: 0, count: windowSecs.count)
+        var periodLatTotal = [Double](repeating: 0, count: windowSecs.count)
+        var periodLatCount = [Int](repeating: 0, count: windowSecs.count)
 
         for s in sessions {
             let when = s.updated_at.flatMap { Self.parseISO($0) }
@@ -144,6 +150,8 @@ final class DataStore: ObservableObject {
             let isToday = dayKey == todayKey
             let inWeek = when.map { $0 >= sevenDaysAgo } ?? false
 
+            var sessionCost = 0.0
+            var sessionTokens = 0
             for (model, usage) in s.by_model {
                 if Self.isSyntheticModel(model) { continue }
                 let tier = Pricing.tier(for: model, table: pricing)
@@ -152,6 +160,9 @@ final class DataStore: ObservableObject {
                 var m = byModelMap[model] ?? TokenTotals()
                 add(&m, usage: usage, cost: cost)
                 byModelMap[model] = m
+                sessionCost += cost
+                sessionTokens += usage.input_tokens + usage.output_tokens
+                    + usage.cache_creation_input_tokens + usage.cache_read_input_tokens
                 if isToday {
                     add(&today, usage: usage, cost: cost)
                     sessionsTodaySet.insert(s.session_id)
@@ -163,7 +174,40 @@ final class DataStore: ObservableObject {
                     byDayMap[dayKey] = d
                 }
             }
+
+            var sessionLatTotal = 0.0
+            var sessionLatCount = 0
+            for (_, lat) in s.tool_latency ?? [:] {
+                sessionLatTotal += lat.totalMs
+                sessionLatCount += lat.count
+            }
+
+            if let when = when {
+                let age = now.timeIntervalSince(when)
+                for i in windowSecs.indices where age <= windowSecs[i] {
+                    periodCost[i] += sessionCost
+                    periodTokens[i] += sessionTokens
+                    periodLatTotal[i] += sessionLatTotal
+                    periodLatCount[i] += sessionLatCount
+                }
+            }
         }
+
+        let periodLabels = ["Day", "Week", "Month", "Year"]
+        let periodSubs = ["last 24h", "last 7 days", "last 30 days", "last 365 days"]
+        let periods: [PeriodRollup] = windowSecs.indices.map { i in
+            PeriodRollup(label: periodLabels[i], sub: periodSubs[i],
+                         costUSD: periodCost[i], tokens: periodTokens[i],
+                         avgLatencyMs: periodLatCount[i] > 0 ? periodLatTotal[i] / Double(periodLatCount[i]) : 0)
+        }
+        let dailyCostRate = periodCost[1] / 7.0
+        let dailyTokenRate = Double(periodTokens[1]) / 7.0
+        let projection = Projection(
+            weeklyCost: dailyCostRate * 7.0,
+            monthlyCost: dailyCostRate * 30.0,
+            weeklyTokens: Int(dailyTokenRate * 7.0),
+            monthlyTokens: Int(dailyTokenRate * 30.0)
+        )
 
         let weekKeys: [String] = (0..<7).map { i in
             let d = Date().addingTimeInterval(-Double(6 - i) * oneDay)
@@ -243,6 +287,8 @@ final class DataStore: ObservableObject {
             byDay: byDay,
             tools: Array(toolStats.prefix(10)),
             toolLatencies: Array(toolLatencies.prefix(10)),
+            periods: periods,
+            projection: projection,
             cacheHitRatio: cacheRatio,
             sessionsToday: sessionsTodaySet.count,
             sessionsLifetime: sessions.count,
