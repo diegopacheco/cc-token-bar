@@ -7,22 +7,31 @@ enum Snapshot {
         app.setActivationPolicy(.accessory)
         let store = DataStore()
         store.start()
+        let prefs = PrefsStore(inMemory: true, alerts: [
+            AlertRule(metric: .cost, op: .ge, value: 50),
+            AlertRule(metric: .cost, op: .gt, value: 200),
+            AlertRule(metric: .tokens, op: .ge, value: 500_000_000)
+        ], budgetUSD: 500)
         let dir = URL(fileURLWithPath: outputDir)
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
             let targets: [(PanelTab, String)] = [
+                (.cost, "screenshot-cost.png"),
+                (.latency, "screenshot-latency.png"),
                 (.aggregations, "screenshot-aggregates.png"),
-                (.projections, "screenshot-projections.png")
+                (.projections, "screenshot-projections.png"),
+                (.alerts, "screenshot-alerts.png"),
+                (.budget, "screenshot-budget.png")
             ]
             for (tab, name) in targets {
-                render(tab: tab, store: store, to: dir.appendingPathComponent(name))
+                render(tab: tab, store: store, prefs: prefs, to: dir.appendingPathComponent(name))
             }
             app.terminate(nil)
         }
         app.run()
     }
 
-    private static func render(tab: PanelTab, store: DataStore, to url: URL) {
-        let root = PanelView(store: store, initialTab: tab, embedScroll: false)
+    private static func render(tab: PanelTab, store: DataStore, prefs: PrefsStore, to url: URL) {
+        let root = PanelView(store: store, prefs: prefs, initialTab: tab, embedScroll: false)
             .background(Color(nsColor: .windowBackgroundColor))
         let host = NSHostingView(rootView: AnyView(root))
         let window = NSWindow(

@@ -14,8 +14,10 @@ Give a Claude Code user a permanently visible, glanceable readout of:
 - Latency per tool call, listed and sorted.
 - Cost, tokens, and average latency rolled up over rolling time windows (24h / 7d / 30d / 365d).
 - Forward cost and token projections based on recent consumption pace.
+- User-defined alerts that fire a macOS notification when a daily cost/token total crosses a threshold.
+- A daily budget with a depleting donut gauge of how much spend is left today.
 
-The dropdown is split into four tabs: **Cost** (default), **Latency**, **Aggregates**, and **Projections**.
+The dropdown is split into six tabs: **Cost** (default), **Latency**, **Aggregates**, **Projections**, **Alerts**, and **Budget**. With six tabs the segmented text control no longer fits at 360 pt, so the tab bar is a row of six icon buttons (SF Symbol + tiny label), the active one tinted with the accent colour.
 
 Data is captured locally via Claude Code hooks and stored as JSON under `~/.cc-token-bar/`. Nothing leaves the machine.
 
@@ -127,7 +129,9 @@ The hook must finish in well under the default hook timeout (60 s). Worst case i
 ~/.cc-token-bar/
 ├── bin/
 │   └── hook.sh
-├── config.json                       # pricing table, refresh interval
+├── config.json                       # pricing table, refresh interval (install-managed)
+├── prefs.json                        # alerts + daily budget (app-managed, user-edited in UI)
+├── alerts-state.json                 # per-rule last-fired day, for notification de-dup
 ├── sessions/
 │   └── <session_id>.json             # one per Claude Code session
 ├── tools/
@@ -236,12 +240,14 @@ Beyond "total tokens" and "tools by cost", here's the broader set that's cheap t
 
 **Menu bar item:** fixed-width identifier — a bar-chart SF Symbol followed by the literal text `cc`. The label is intentionally static to minimise menu bar real estate and survive crowded notch layouts on MacBooks. All dynamic numbers live inside the dropdown.
 
-**Tabs.** Directly under the header a segmented control switches the panel body between four tabs (`PanelView.tab`, a `@State PanelTab`):
+**Tabs.** Directly under the header an icon tab bar switches the panel body between six tabs (`PanelView.tab`, a `@State PanelTab`). Each tab is a borderless button with an SF Symbol over an 8 pt label; the selected one gets an accent-tinted rounded background. (This replaced the earlier segmented text `Picker`, which could not fit six labels in 360 pt.) The tabs:
 
 - **Cost** *(default, shown on every open)* — the full metric set: Today/All-time KPIs, cache hit ratio, 7-day chart, tools by cost, cost by model.
 - **Latency** — one row per tool, the average wall-clock latency of its calls, sorted slowest first, with a proportional bar and the call count.
 - **Aggregates** — three cards, one **per metric**: Cost, Tokens, and Avg latency. Each card has a row for every rolling window (Day = last 24h, Week = last 7d, Month = last 30d, Year = last 365d) with a gradient bar scaled to that card's largest window plus the value. Splitting by metric (rather than the earlier one-card-per-window grid, which mixed dollars, tokens, and seconds on a single card) keeps each card comparing like with like. A session is counted in a window when its `updated_at` falls inside it; the windows are nested, so the same session contributes to every window it is recent enough for. Cost and tokens are cumulative (bars climb Day → Year); average latency is not, so that card is a true side-by-side comparison.
 - **Projections** — two cards (**Next 7 days** / **Next 30 days**) of projected cost and tokens, followed by two Swift Charts: a **cost trend** and a **token trend**. Each chart plots the last 14 days of actual daily usage as a solid accent line with a filled area, then a dashed violet line extending 7 days into the future at the projected daily rate (anchored to the last actual point so the two segments connect). Both the cards and the dashed projection extrapolate the *last 7 days* of actual consumption: a daily rate (`7d total ÷ 7`) multiplied by 7 for the week and 30 for the month. This is a current-pace run-rate, not a calendar forecast — it answers "if I keep going like this week, what will it cost".
+- **Alerts** — a small form (metric `Picker` Cost/Tokens · operator `Picker` `<` `<=` `=` `>=` `>` · numeric text field · add button) plus a live-editable list of the rules already saved. Each list row is itself editable (the same two pickers + field) with a trash button. Rules persist to `~/.cc-token-bar/prefs.json`. On every refresh `AlertNotifier.evaluate(_:)` checks each rule against **today's** cost or token total and, when the comparison is true and that rule has not already fired today, posts a macOS `UNUserNotification`. A per-day de-dup map (`alerts-state.json`, keyed by rule id → day) stops repeat banners; it resets when the day rolls over. Because the app runs as an accessory and `FSWatcher` keeps refreshing on hook writes, alerts fire even with the popover closed — but only while the app is running.
+- **Budget** — a numeric field for a **daily** spend cap (persisted to `prefs.json`) and a donut gauge. The donut is two stacked `Circle`s: a faint full ring and an accent ring trimmed to `min(1, todayCost / budget)`, with the remaining dollars in the centre. When today's spend exceeds the budget the ring fills and turns red and the centre shows the overage. A drawn ring (not Swift Charts `SectorMark`) keeps the gauge working on the macOS 13 deployment target.
 
 The header, tab control, and footer are shared; only the body between them swaps. The selected tab is local UI state and resets to **Cost** when the app relaunches.
 
@@ -283,7 +289,8 @@ Click opens this panel:
 ┌──────────────────────────────────────────┐
 │  cc-token-bar                          ✕  │
 ├──────────────────────────────────────────┤
-│ [ Cost ][ Latency ][Aggregates][Projections]│  ← segmented tab control
+│  ⓢ    ⏱    ▦    ↗    🔔    ◔            │  ← icon tab bar (6 tabs)
+│ Cost Latency Aggr Proj Alerts Budget    │
 ├──────────────────────────────────────────┤
 │  Today        412,103 tokens   $1.84     │   Cost tab (default)
 │  All-time   8,910,442 tokens  $42.17     │
@@ -344,6 +351,27 @@ Projections tab body:
 │   5/17       5/24        5/31            │
 │  Solid = actual daily (14d). Dashed =    │
 │  projected at last 7-day pace.           │
+
+Alerts tab body:
+├──────────────────────────────────────────┤
+│  NEW ALERT                               │
+│   [Cost ▾] [>= ▾] [ amount ]  (＋)       │
+│  ────────────────────────────────────   │
+│  YOUR ALERTS                             │
+│   [Cost ▾]  [>= ▾]  [ 50          ]  🗑   │
+│   [Cost ▾]  [>  ▾]  [ 200         ]  🗑   │
+│   [Tokens▾] [>= ▾]  [ 500,000,000 ]  🗑   │
+
+Budget tab body:
+├──────────────────────────────────────────┤
+│  DAILY BUDGET                            │
+│   $ [ 500 ]  per day                     │
+│            ╭───────────╮                 │
+│           ╱   $337.93   ╲   ← accent arc  │
+│          │   left today  │   = used %     │
+│           ╲             ╱                 │
+│            ╰───────────╯                 │
+│   Used $162.07 of $500.00 today (32%).   │
 ```
 
 **Refresh:** FSEvents watcher on `~/.cc-token-bar/sessions/` and `tools/`. Recompute aggregates on change. Plus a 5 s repeating timer that runs only while the popover is shown (started in `popoverDidShow`, invalidated in `popoverDidClose`). A one-shot refresh fires on every click-to-open so the panel never paints stale data.
@@ -376,7 +404,7 @@ Both scripts: no comments, no `sleep > 1`, no emojis (per project conventions).
 
 `preview.html` (sibling file) mocks the menu bar dropdown with fake data: header totals, inline SVG 7-day chart, tool-cost list. No JS libraries — pure HTML/CSS/SVG. Use this to iterate on layout before any Swift is written.
 
-**Tab screenshots for docs.** The app accepts a hidden `--snapshot <dir>` argument (`Snapshot.swift`). It boots a headless accessory `NSApplication`, lets `DataStore` load real data, then renders the Aggregates and Projections tabs offscreen (`PanelView(..., embedScroll: false)` so the content sizes to its natural height instead of scrolling) into retina PNGs via `NSHostingView.cacheDisplay`, and exits. Swift `Chart` views *do* render correctly this way — the Projections tab's two trend charts are captured offscreen. The Cost and Latency tabs are still captured manually from the live popover, only so they keep the popover's translucent material background that an offscreen solid-colour render can't reproduce. Run: `swift build && .build/debug/cc-token-bar --snapshot <repo-root>`.
+**Tab screenshots for docs.** The app accepts a hidden `--snapshot <dir>` argument (`Snapshot.swift`). It boots a headless accessory `NSApplication`, lets `DataStore` load real data, builds an in-memory `PrefsStore` with sample alerts and a sample budget (so the Alerts/Budget tabs aren't empty and nothing is written to the real `prefs.json`), then renders **all six** tabs offscreen (`PanelView(..., embedScroll: false)` so the content sizes to its natural height instead of scrolling) into retina PNGs via `NSHostingView.cacheDisplay`, and exits. Swift `Chart` views render correctly this way (the Cost 7-day bars and the Projections trend lines are both captured offscreen), so the whole set is regenerated in one pass. Run: `swift build && .build/debug/cc-token-bar --snapshot <repo-root>`.
 
 ## 11. Decisions (locked) & remaining questions
 
@@ -390,9 +418,12 @@ Both scripts: no comments, no `sleep > 1`, no emojis (per project conventions).
 | 4 | Hook                   | Ship the hook, mark optional in `install.sh`. App falls back to FSEvents-only if hook not installed       |
 | 5 | v1 metric set          | Today + lifetime header · 7-day stacked chart · tools by cost · cache hit ratio · cost by model split     |
 | 6 | Backfill on install    | Yes — scan all existing `~/.claude/projects/**/*.jsonl` and seed `index.json`                             |
-| 7 | Panel tabs             | Four tabs: **Cost** (default, the v1 metric set), **Latency** (avg latency per tool), **Aggregates** (cost/tokens/avg latency over rolling 24h/7d/30d/365d windows), **Projections** (next-7-day and next-30-day cost & token run-rate from the last 7 days). Shared header/footer |
+| 7 | Panel tabs             | Six tabs: **Cost** (default), **Latency**, **Aggregates** (rolling 24h/7d/30d/365d), **Projections** (run-rate), **Alerts** (threshold notifications), **Budget** (daily cap donut). Icon tab bar (segmented text doesn't fit six). Shared header/footer |
 | 10 | Window semantics      | Rolling trailing windows (last 24h / 7d / 30d / 365d), not calendar periods. Avoids week-start ambiguity; gives a stable run-rate for projections |
 | 11 | Projection basis      | Last 7 days of actual consumption → daily rate (`7d ÷ 7`) × 7 for the week, × 30 for the month. Current-pace run-rate, not a calendar forecast |
+| 12 | Alert evaluation       | Per-rule comparison against **today's** cost/token total, run on every `DataStore` refresh; one banner per rule per day (`alerts-state.json` de-dup). `UNUserNotification`; works with popover closed while the app runs |
+| 13 | Budget period          | **Daily** — the donut tracks today's cost against a user-set daily cap, matching the daily alert model. Single constant to change if a monthly/lifetime cap is wanted later |
+| 14 | Budget gauge           | Hand-drawn `Circle().trim()` donut, not Swift Charts `SectorMark` (which needs macOS 14), to hold the macOS 13 deployment target |
 | 8 | Playwright tools       | Collapse all `mcp__playwright__*` to one `mcp_playwright` row in both tabs                                 |
 | 9 | Latency source         | Transcript `tool_use`→`tool_result` timestamp delta; no hook changes                                      |
 

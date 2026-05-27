@@ -4,6 +4,7 @@ import CCMetrics
 
 final class DataStore: ObservableObject {
     @Published private(set) var agg: Aggregates = Aggregates()
+    var onAgg: ((Aggregates) -> Void)?
 
     private let dataDir: URL
     private let sessionsDir: URL
@@ -67,6 +68,7 @@ final class DataStore: ObservableObject {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             if self.agg != next { self.agg = next }
+            self.onAgg?(next)
         }
     }
 

@@ -9,12 +9,16 @@ A native macOS menu bar app that surfaces Claude Code token usage, cost, and too
 <div align="center">
 <table>
   <tr>
-    <td align="center"><img src="./screenshot-cost.png" width="260" /><br/><b>Cost</b></td>
-    <td align="center"><img src="./screenshot-latency.png" width="260" /><br/><b>Latency</b></td>
+    <td align="center"><img src="./screenshot-cost.png" width="240" /><br/><b>Cost</b></td>
+    <td align="center"><img src="./screenshot-latency.png" width="240" /><br/><b>Latency</b></td>
   </tr>
   <tr>
-    <td align="center"><img src="./screenshot-aggregates.png" width="260" /><br/><b>Aggregates</b></td>
-    <td align="center"><img src="./screenshot-projections.png" width="260" /><br/><b>Projections</b></td>
+    <td align="center"><img src="./screenshot-aggregates.png" width="240" /><br/><b>Aggregates</b></td>
+    <td align="center"><img src="./screenshot-projections.png" width="240" /><br/><b>Projections</b></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="./screenshot-alerts.png" width="240" /><br/><b>Alerts</b></td>
+    <td align="center"><img src="./screenshot-budget.png" width="240" /><br/><b>Budget</b></td>
   </tr>
 </table>
 </div>
@@ -28,8 +32,10 @@ A native macOS menu bar app that surfaces Claude Code token usage, cost, and too
 - **Cost by model** — Opus vs Sonnet vs Haiku breakdown with % share.
 - **Aggregates** — cost, tokens, and average tool latency rolled up over rolling windows: last 24h, 7d, 30d, 365d.
 - **Projections** — next-7-day and next-30-day cost and token estimates, extrapolated from your last 7 days of usage.
+- **Alerts** — define thresholds on daily cost or tokens (e.g. `Cost >= 50`) and get a macOS notification when you cross them, even with the dropdown closed.
+- **Budget** — set a daily spend cap and watch a donut deplete as today's usage eats into it.
 
-Four tabs — **Cost**, **Latency**, **Aggregates**, **Projections** — switch the dropdown body via the segmented control under the title.
+Six tabs — **Cost**, **Latency**, **Aggregates**, **Projections**, **Alerts**, **Budget** — switch the dropdown body via the icon bar under the title.
 
 The menu bar item itself is just a bar-chart icon + the text **`cc`** — fixed-width so it doesn't fight your other menu bar apps for space (or get eaten by the MacBook notch).
 
@@ -138,11 +144,14 @@ Mirrors install in reverse: unloads & removes LaunchAgent, kills the app, remove
 
 Model keys match by prefix — anything starting with `claude-opus-4` (4.5, 4.6, 4.7, …) hits the Opus tier. Add your own keys for fine-tuning or for future models.
 
+Your **alerts** and **daily budget** live separately in `~/.cc-token-bar/prefs.json`, written by the app as you edit the Alerts and Budget tabs (you normally won't touch it by hand). Notification de-dup state lives in `alerts-state.json`.
+
 ## Tech stack
 
 - **Swift 5.9 + SwiftUI + AppKit + CoreServices** — built with Swift Package Manager, zero third-party dependencies.
 - **`NSStatusItem` + `NSPopover` + `NSHostingController`** — chosen over `MenuBarExtra` because SwiftPM-built apps using `MenuBarExtra` were unreliable on macOS 26.
 - **`FSEventStreamCreate`** with file-level events — drives the live refresh.
+- **`UserNotifications`** — daily threshold alerts as native notification banners, fired from the background accessory app.
 - **`jq` + bash** — for the hook. No Python, no Node.
 - **`Charts` framework** — system-provided stacked bar chart, no third-party charting lib.
 
@@ -167,8 +176,10 @@ cc-token-bar/
         ├── Pricing.swift                  per-million pricing + prefix model match
         ├── DataStore.swift                ObservableObject, scans + aggregates
         ├── FSWatcher.swift                CoreServices FSEvents wrapper
+        ├── Prefs.swift                    PrefsStore: alerts + daily budget (prefs.json)
+        ├── Notifier.swift                 UserNotifications: daily alert evaluation + de-dup
         ├── Snapshot.swift                 --snapshot mode: render tabs to PNG for docs
-        └── Views.swift                    SwiftUI PanelView (4 tabs: cost, latency, aggregates, projections)
+        └── Views.swift                    SwiftUI PanelView (6 tabs: cost, latency, aggregates, projections, alerts, budget)
 ```
 
 ## Design
@@ -177,7 +188,7 @@ Full design — including data sources, metrics catalog, attribution model, and 
 
 ## Result
 
-The dropdown has four tabs — **Cost**, **Latency**, **Aggregates**, and **Projections** — switched by the segmented control under the title (see the four screenshots at the top of this README). All of them run against real Claude Code data on this machine: 88 sessions, 96.6 % cache hit ratio.
+The dropdown has six tabs — **Cost**, **Latency**, **Aggregates**, **Projections**, **Alerts**, and **Budget** — switched by the icon bar under the title (see the six screenshots at the top of this README). All of them run against real Claude Code data on this machine: 89 sessions, 96.5 % cache hit ratio. The Alerts and Budget shots use sample rules and a sample $500/day cap purely for illustration.
 
 ### Cost tab
 
@@ -212,5 +223,21 @@ A forward-looking run-rate built from **actual recent consumption**, with the tr
 - Two cards — **Next 7 days** (`$1,537.30` / `597.1M` tokens) and **Next 30 days** (`$6,588.43` / `2.56B` tokens) — each a projected **cost** and **token** count.
 - Two **trend charts**, one for cost and one for tokens. Each plots the **last 14 days of actual daily usage** as a solid blue line with a filled area, then a **dashed violet line** projecting 7 days forward at your current pace. The dashed line connects to the last real point, so you read the past and the projection as one continuous shape.
 - Everything extrapolates your *last 7 days*: a daily rate (`7-day total ÷ 7`) × 7 for the week and × 30 for the month. It's a current-pace projection, not a calendar forecast — it answers "if I keep working like I did this past week, what will it cost", and it moves as your recent usage moves.
+
+### Alerts tab
+
+Define your own thresholds and get notified when daily usage crosses them:
+
+- The **New alert** row is two dropdowns — metric (**Cost** or **Tokens**) and operator (`<`, `<=`, `=`, `>=`, `>`) — plus a number-only field and an add button. **Your alerts** below is a live list; every row is editable in place (change the metric, operator, or value) and has a trash button. Add as many as you want.
+- Rules are saved to `~/.cc-token-bar/prefs.json`. On every refresh each rule is checked against **today's** cost or token total; when it's true you get a macOS notification banner — **once per rule per day** (a per-rule de-dup resets at midnight). The check runs whenever usage changes, so alerts fire even with the dropdown closed, as long as the app is running.
+- First run shows the system permission prompt for notifications; if you decline, alerts are saved but silently won't fire until you re-enable them in System Settings → Notifications.
+
+### Budget tab
+
+A visual daily spend limit:
+
+- Type a **daily budget** (numbers only) — say `$500` — and it's saved to `prefs.json`.
+- The **donut** depletes as today's cost climbs: the accent arc is the fraction used, the center shows dollars **left today**, and the caption spells out `used $X of $Y (Z%)`. In the shot it's `$337.93` left after `$162.07` of a `$500` day. Go over and the ring fills, turns red, and the center flips to the overage.
+- It resets each day, so it's a fresh limit every morning — the same daily mental model as the Alerts tab.
 
 The footer is shared by every tab: `Open data folder` reveals `~/.cc-token-bar/` in Finder so you can inspect the raw JSON; `Quit` exits cleanly (the LaunchAgent will respawn it on next login).

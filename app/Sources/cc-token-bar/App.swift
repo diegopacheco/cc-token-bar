@@ -1,12 +1,19 @@
 import AppKit
 import SwiftUI
 
+final class KeyablePanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var statusItem: NSStatusItem!
     private var panelWindow: NSPanel!
     private var hostingController: NSHostingController<PanelView>!
     private var visualEffect: NSVisualEffectView!
     private let store = DataStore()
+    private let prefs = PrefsStore()
+    private var notifier: AlertNotifier!
     private var eventMonitor: Any?
     private let panelWidth: CGFloat = 360
     private let preferredPanelHeight: CGFloat = 720
@@ -15,6 +22,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        let dataDir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".cc-token-bar")
+        notifier = AlertNotifier(dataDir: dataDir)
+        notifier.requestAuthorization()
+        store.onAgg = { [weak self] agg in
+            guard let self = self else { return }
+            self.notifier.evaluate(agg: agg, alerts: self.prefs.alerts)
+        }
         store.start()
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -34,7 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
 
         let initial = NSRect(x: 0, y: 0, width: panelWidth, height: 480)
-        panelWindow = NSPanel(
+        panelWindow = KeyablePanel(
             contentRect: initial,
             styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView],
             backing: .buffered,
@@ -58,7 +72,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         visualEffect.layer?.masksToBounds = true
         visualEffect.autoresizingMask = [.width, .height]
 
-        hostingController = NSHostingController(rootView: PanelView(store: store))
+        hostingController = NSHostingController(rootView: PanelView(store: store, prefs: prefs))
         hostingController.view.frame = visualEffect.bounds
         hostingController.view.autoresizingMask = [.width, .height]
         visualEffect.addSubview(hostingController.view)
@@ -94,7 +108,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let originY = topLimit - size.height
         let frame = NSRect(x: originX, y: originY, width: size.width, height: size.height)
         panelWindow.setFrame(frame, display: true)
-        panelWindow.orderFrontRegardless()
+        NSApp.activate(ignoringOtherApps: true)
+        panelWindow.makeKeyAndOrderFront(nil)
         store.startVisibleRefresh()
         installDismissMonitor()
     }

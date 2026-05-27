@@ -7,15 +7,22 @@ enum PanelTab: Hashable {
     case latency
     case aggregations
     case projections
+    case alerts
+    case budget
 }
 
 struct PanelView: View {
     @ObservedObject var store: DataStore
+    @ObservedObject var prefs: PrefsStore
     @State private var tab: PanelTab
+    @State private var draftMetric: AlertMetric = .cost
+    @State private var draftOp: AlertOp = .ge
+    @State private var draftValue: String = ""
     private let embedScroll: Bool
 
-    init(store: DataStore, initialTab: PanelTab = .cost, embedScroll: Bool = true) {
+    init(store: DataStore, prefs: PrefsStore, initialTab: PanelTab = .cost, embedScroll: Bool = true) {
         self.store = store
+        self.prefs = prefs
         self._tab = State(initialValue: initialTab)
         self.embedScroll = embedScroll
     }
@@ -52,6 +59,10 @@ struct PanelView: View {
                 aggregationsSection
             case .projections:
                 projectionsSection
+            case .alerts:
+                alertsSection
+            case .budget:
+                budgetSection
             }
             footer
         }
@@ -61,15 +72,31 @@ struct PanelView: View {
     }
 
     private var tabBar: some View {
-        Picker("", selection: $tab) {
-            Text("Cost").tag(PanelTab.cost)
-            Text("Latency").tag(PanelTab.latency)
-            Text("Aggregates").tag(PanelTab.aggregations)
-            Text("Projections").tag(PanelTab.projections)
+        HStack(spacing: 4) {
+            tabButton(.cost, "dollarsign.circle", "Cost")
+            tabButton(.latency, "timer", "Latency")
+            tabButton(.aggregations, "square.grid.2x2", "Aggregates")
+            tabButton(.projections, "chart.line.uptrend.xyaxis", "Projections")
+            tabButton(.alerts, "bell", "Alerts")
+            tabButton(.budget, "chart.pie", "Budget")
         }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .padding(.horizontal, 14).padding(.vertical, 10)
+        .padding(.horizontal, 10).padding(.vertical, 8)
+    }
+
+    private func tabButton(_ t: PanelTab, _ symbol: String, _ name: String) -> some View {
+        Button { tab = t } label: {
+            VStack(spacing: 3) {
+                Image(systemName: symbol).font(.system(size: 14, weight: .medium))
+                Text(name).font(.system(size: 8)).lineLimit(1)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 5)
+            .background(tab == t ? Color.accentColor.opacity(0.18) : Color.clear)
+            .foregroundStyle(tab == t ? Color.accentColor : Color.secondary)
+            .clipShape(RoundedRectangle(cornerRadius: 7))
+        }
+        .buttonStyle(.plain)
+        .help(name)
     }
 
     private var header: some View {
@@ -295,6 +322,116 @@ struct PanelView: View {
             }
             .frame(height: 92)
         }
+    }
+
+    private var alertsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionTitle("New alert")
+            HStack(spacing: 6) {
+                Picker("", selection: $draftMetric) {
+                    ForEach(AlertMetric.allCases) { Text($0.label).tag($0) }
+                }.labelsHidden().frame(width: 92)
+                Picker("", selection: $draftOp) {
+                    ForEach(AlertOp.allCases) { Text($0.rawValue).tag($0) }
+                }.labelsHidden().frame(width: 64)
+                TextField("amount", text: $draftValue)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 86)
+                    .onChange(of: draftValue) { draftValue = Self.numericOnly($0) }
+                Button {
+                    if let v = Double(draftValue) {
+                        prefs.addAlert(metric: draftMetric, op: draftOp, value: v)
+                        draftValue = ""
+                    }
+                } label: { Image(systemName: "plus.circle.fill").font(.system(size: 18)) }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Double(draftValue) == nil ? Color.secondary : Color.accentColor)
+                    .disabled(Double(draftValue) == nil)
+            }
+            divider
+            sectionTitle("Your alerts")
+            if prefs.alerts.isEmpty {
+                Text("No alerts yet. Add one above — you'll get a notification when a daily total crosses it.")
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                ForEach($prefs.alerts) { $alert in
+                    HStack(spacing: 6) {
+                        Picker("", selection: $alert.metric) {
+                            ForEach(AlertMetric.allCases) { Text($0.label).tag($0) }
+                        }.labelsHidden().frame(width: 92)
+                        Picker("", selection: $alert.op) {
+                            ForEach(AlertOp.allCases) { Text($0.rawValue).tag($0) }
+                        }.labelsHidden().frame(width: 64)
+                        TextField("", value: $alert.value, format: .number)
+                            .textFieldStyle(.roundedBorder).frame(width: 86)
+                        Button { prefs.removeAlert(alert.id) } label: {
+                            Image(systemName: "trash").font(.system(size: 13))
+                        }.buttonStyle(.plain).foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+        .padding(14)
+    }
+
+    private static func numericOnly(_ s: String) -> String {
+        var seenDot = false
+        return String(s.filter { c in
+            if c.isNumber { return true }
+            if c == "." && !seenDot { seenDot = true; return true }
+            return false
+        })
+    }
+
+    private var budgetSection: some View {
+        let used = store.agg.today.costUSD
+        let budget = prefs.budgetUSD
+        let remaining = max(0, budget - used)
+        let fraction = budget > 0 ? min(1, used / budget) : 0
+        let over = budget > 0 && used > budget
+        return VStack(alignment: .leading, spacing: 14) {
+            sectionTitle("Daily budget")
+            HStack(spacing: 6) {
+                Text("$").foregroundStyle(.secondary)
+                TextField("amount", value: $prefs.budgetUSD, format: .number)
+                    .textFieldStyle(.roundedBorder).frame(width: 110)
+                Text("per day").font(.system(size: 11)).foregroundStyle(.secondary)
+            }
+            if budget <= 0 {
+                Text("Set a daily budget to see how much of today's spend is left.")
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                budgetDonut(fraction: fraction, remaining: remaining, over: over)
+                    .frame(maxWidth: .infinity)
+                Text(over
+                     ? "Over budget by \(DataStore.formatUSD(used - budget)) — used \(DataStore.formatUSD(used)) of \(DataStore.formatUSD(budget))."
+                     : "Used \(DataStore.formatUSD(used)) of \(DataStore.formatUSD(budget)) today (\(String(format: "%.0f%%", fraction * 100))).")
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(14)
+    }
+
+    private func budgetDonut(fraction: Double, remaining: Double, over: Bool) -> some View {
+        let usedColor = over ? Color(red: 0.86, green: 0.24, blue: 0.24) : Color.accentColor
+        return ZStack {
+            Circle().stroke(Color.secondary.opacity(0.18), lineWidth: 18)
+            Circle()
+                .trim(from: 0, to: fraction)
+                .stroke(usedColor, style: StrokeStyle(lineWidth: 18, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+            VStack(spacing: 2) {
+                Text(DataStore.formatUSD(remaining))
+                    .font(.system(size: 22, weight: .bold)).monospacedDigit()
+                    .foregroundStyle(over ? usedColor : Color.primary)
+                Text(over ? "over" : "left today").font(.system(size: 11)).foregroundStyle(.secondary)
+            }
+        }
+        .frame(width: 150, height: 150)
+        .padding(.vertical, 6)
     }
 
     private func bar(fraction: Double) -> some View {
