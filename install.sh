@@ -92,6 +92,7 @@ rm -rf "$APP_DIR"
 mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
 cp "$BUILT" "$APP_DIR/Contents/MacOS/cc-token-bar"
 cp "$SRC_DIR/app/Info.plist" "$APP_DIR/Contents/Info.plist"
+cp "$SRC_DIR/app/AppIcon.icns" "$APP_DIR/Contents/Resources/AppIcon.icns"
 
 backfill() {
   local count=0
