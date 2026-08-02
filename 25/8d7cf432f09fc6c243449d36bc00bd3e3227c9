@@ -1,0 +1,21 @@
+app/Info.plist
+  s_3b92c0b72dc9ce::t_13e4e0e6f25229 17-18
+install.sh
+  s_3b92c0b72dc9ce::t_13e4e0e6f25229 95,141
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "258d7cf432f09fc6c243449d36bc00bd3e3227c9",
+  "prompts": {},
+  "sessions": {
+    "s_3b92c0b72dc9ce": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fc1d7-00ac-7b72-b4c6-b759ae26fa77",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "diegopacheco <diego.pacheco.it@gmail.com>"
+    }
+  }
+}
