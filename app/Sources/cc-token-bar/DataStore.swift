@@ -147,6 +147,7 @@ final class DataStore: ObservableObject {
         var periodTokens = [Int](repeating: 0, count: windowSecs.count)
         var periodLatTotal = [Double](repeating: 0, count: windowSecs.count)
         var periodLatCount = [Int](repeating: 0, count: windowSecs.count)
+        var stamps: [(when: Date, tokens: Int)] = []
 
         for s in sessions {
             let when = s.updated_at.flatMap { Self.parseISO($0) }
@@ -188,6 +189,7 @@ final class DataStore: ObservableObject {
             }
 
             if let when = when {
+                if sessionTokens > 0 { stamps.append((when, sessionTokens)) }
                 let age = now.timeIntervalSince(when)
                 for i in windowSecs.indices where age <= windowSecs[i] {
                     periodCost[i] += sessionCost
@@ -306,10 +308,14 @@ final class DataStore: ObservableObject {
             .sorted { $0.1.costUSD > $1.1.costUSD }
 
         let label = Self.formatStatusLabel(today: today)
+        let sessionUsage = Self.sessionWindow(stamps: stamps, now: now, cal: cal)
+        let weeklyUsage = Self.weeklyWindow(stamps: stamps, now: now)
 
         return Aggregates(
             today: today,
             lifetime: lifetime,
+            sessionUsage: sessionUsage,
+            weeklyUsage: weeklyUsage,
             byModel: byModelSorted,
             byDay: byDay,
             tools: Array(toolStats.prefix(10)),
@@ -330,6 +336,53 @@ final class DataStore: ObservableObject {
         t.cacheWrite += usage.cache_creation_input_tokens
         t.cacheRead  += usage.cache_read_input_tokens
         t.costUSD    += cost
+    }
+
+    static let blockLength: TimeInterval = 5 * 3600
+
+    static func sessionWindow(stamps: [(when: Date, tokens: Int)], now: Date, cal: Calendar) -> UsageWindow {
+        let sorted = stamps.sorted { $0.when < $1.when }
+        var blockStart: Date?
+        for s in sorted {
+            if let start = blockStart, s.when < start.addingTimeInterval(blockLength) { continue }
+            var c = cal.dateComponents([.year, .month, .day, .hour], from: s.when)
+            c.minute = 0
+            c.second = 0
+            blockStart = cal.date(from: c) ?? s.when
+        }
+        guard let start = blockStart else {
+            return UsageWindow(label: "Session (5h)", tokens: 0, resetAt: nil)
+        }
+        let end = start.addingTimeInterval(blockLength)
+        guard now < end else {
+            return UsageWindow(label: "Session (5h)", tokens: 0, resetAt: nil)
+        }
+        let total = sorted.filter { $0.when >= start && $0.when < end }.reduce(0) { $0 + $1.tokens }
+        return UsageWindow(label: "Session (5h)", tokens: total, resetAt: end)
+    }
+
+    static func weeklyWindow(stamps: [(when: Date, tokens: Int)], now: Date) -> UsageWindow {
+        var cal = Calendar(identifier: .gregorian)
+        cal.firstWeekday = 2
+        guard let week = cal.dateInterval(of: .weekOfYear, for: now) else {
+            return UsageWindow(label: "Weekly", tokens: 0, resetAt: nil)
+        }
+        let total = stamps.filter { $0.when >= week.start && $0.when < week.end }.reduce(0) { $0 + $1.tokens }
+        return UsageWindow(label: "Weekly", tokens: total, resetAt: week.end)
+    }
+
+    static func formatReset(_ date: Date?, now: Date) -> String {
+        guard let date = date else { return "no active block" }
+        let secs = date.timeIntervalSince(now)
+        if secs <= 0 { return "resetting" }
+        if secs < 86_400 {
+            let h = Int(secs) / 3600
+            let m = (Int(secs) % 3600) / 60
+            return h > 0 ? "resets in \(h)h \(m)m" : "resets in \(m)m"
+        }
+        let f = DateFormatter()
+        f.dateFormat = "EEE"
+        return "resets \(f.string(from: date))"
     }
 
     static func dayKey(for date: Date, cal: Calendar) -> String {

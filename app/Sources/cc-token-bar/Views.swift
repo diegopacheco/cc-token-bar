@@ -59,6 +59,8 @@ struct PanelView: View {
             tabBar
             switch tab {
             case .cost:
+                subscriptionSection
+                divider
                 kpiSection
                 divider
                 cacheSection
@@ -132,6 +134,49 @@ struct PanelView: View {
 
     private var divider: some View {
         Divider().opacity(0.6)
+    }
+
+    private var subscriptionSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionTitle("Subscription left")
+            usageBar(store.agg.sessionUsage, limit: prefs.sessionTokenLimit)
+            usageBar(store.agg.weeklyUsage, limit: prefs.weeklyTokenLimit)
+        }
+        .padding(.horizontal, 14).padding(.top, 4).padding(.bottom, 12)
+    }
+
+    private func usageBar(_ window: UsageWindow, limit: Int) -> some View {
+        let used = limit > 0 ? min(1.0, Double(window.tokens) / Double(limit)) : 0
+        let left = max(0, 1 - used)
+        let color = Self.gaugeColor(left: left)
+        return VStack(alignment: .leading, spacing: 5) {
+            HStack {
+                Text(window.label).font(.system(size: 12, weight: .medium))
+                Spacer()
+                Text(String(format: "%.0f%% left", left * 100))
+                    .font(.system(size: 12, weight: .semibold))
+                    .monospacedDigit()
+            }
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.primary.opacity(0.10))
+                    Capsule().fill(color).frame(width: max(2, geo.size.width * used))
+                }
+            }
+            .frame(height: 8)
+            HStack {
+                Text("\(DataStore.formatTokens(window.tokens)) / \(DataStore.formatTokens(limit))")
+                Spacer()
+                Text(DataStore.formatReset(window.resetAt, now: Date()))
+            }
+            .font(.system(size: 10)).foregroundStyle(.secondary).monospacedDigit()
+        }
+    }
+
+    private static func gaugeColor(left: Double) -> Color {
+        if left >= 0.5 { return Color(red: 0.20, green: 0.72, blue: 0.42) }
+        if left >= 0.2 { return Color(red: 0.95, green: 0.70, blue: 0.10) }
+        return Color(red: 0.90, green: 0.26, blue: 0.24)
     }
 
     private var kpiSection: some View {
@@ -430,6 +475,21 @@ struct PanelView: View {
                     .font(.system(size: 11)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            divider
+            sectionTitle("Subscription limits")
+            HStack(spacing: 6) {
+                TextField("tokens", value: $prefs.sessionTokenLimit, format: .number)
+                    .fieldChrome().frame(width: 130)
+                Text("per 5h block").font(.system(size: 11)).foregroundStyle(.secondary)
+            }
+            HStack(spacing: 6) {
+                TextField("tokens", value: $prefs.weeklyTokenLimit, format: .number)
+                    .fieldChrome().frame(width: 130)
+                Text("per week").font(.system(size: 11)).foregroundStyle(.secondary)
+            }
+            Text("Token caps used by the bars on the Cost tab. Claude never exposes real plan limits locally, so set these to match your plan.")
+                .font(.system(size: 11)).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(14)
     }

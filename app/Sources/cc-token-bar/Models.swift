@@ -101,9 +101,17 @@ struct TrendPoint: Identifiable, Equatable {
     let projected: Bool
 }
 
+struct UsageWindow: Equatable {
+    let label: String
+    let tokens: Int
+    let resetAt: Date?
+}
+
 struct Aggregates: Equatable {
     var today: TokenTotals = TokenTotals()
     var lifetime: TokenTotals = TokenTotals()
+    var sessionUsage: UsageWindow = UsageWindow(label: "Session (5h)", tokens: 0, resetAt: nil)
+    var weeklyUsage: UsageWindow = UsageWindow(label: "Weekly", tokens: 0, resetAt: nil)
     var byModel: [(String, TokenTotals)] = []
     var byDay: [DayBucket] = []
     var tools: [ToolStat] = []
@@ -118,6 +126,8 @@ struct Aggregates: Equatable {
 
     static func == (lhs: Aggregates, rhs: Aggregates) -> Bool {
         lhs.today == rhs.today && lhs.lifetime == rhs.lifetime
+            && lhs.sessionUsage == rhs.sessionUsage
+            && lhs.weeklyUsage == rhs.weeklyUsage
             && lhs.byDay == rhs.byDay && lhs.tools == rhs.tools
             && lhs.toolLatencies == rhs.toolLatencies
             && lhs.periods == rhs.periods

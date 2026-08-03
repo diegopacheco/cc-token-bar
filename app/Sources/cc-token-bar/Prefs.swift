@@ -37,11 +37,18 @@ struct AlertRule: Codable, Identifiable, Equatable {
 private struct PrefsFile: Codable {
     var alerts: [AlertRule]
     var budget_usd: Double
+    var session_token_limit: Int?
+    var weekly_token_limit: Int?
 }
 
 final class PrefsStore: ObservableObject {
+    static let defaultSessionTokenLimit = 500_000_000
+    static let defaultWeeklyTokenLimit = 1_500_000_000
+
     @Published var alerts: [AlertRule] { didSet { save() } }
     @Published var budgetUSD: Double { didSet { save() } }
+    @Published var sessionTokenLimit: Int { didSet { save() } }
+    @Published var weeklyTokenLimit: Int { didSet { save() } }
 
     private let url: URL?
 
@@ -50,6 +57,8 @@ final class PrefsStore: ObservableObject {
             self.url = nil
             self.alerts = alerts
             self.budgetUSD = budgetUSD
+            self.sessionTokenLimit = Self.defaultSessionTokenLimit
+            self.weeklyTokenLimit = Self.defaultWeeklyTokenLimit
             return
         }
         let dir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".cc-token-bar")
@@ -58,9 +67,13 @@ final class PrefsStore: ObservableObject {
            let f = try? JSONDecoder().decode(PrefsFile.self, from: data) {
             self.alerts = f.alerts
             self.budgetUSD = f.budget_usd
+            self.sessionTokenLimit = f.session_token_limit ?? Self.defaultSessionTokenLimit
+            self.weeklyTokenLimit = f.weekly_token_limit ?? Self.defaultWeeklyTokenLimit
         } else {
             self.alerts = []
             self.budgetUSD = 0
+            self.sessionTokenLimit = Self.defaultSessionTokenLimit
+            self.weeklyTokenLimit = Self.defaultWeeklyTokenLimit
         }
     }
 
@@ -74,7 +87,9 @@ final class PrefsStore: ObservableObject {
 
     private func save() {
         guard let url = url else { return }
-        let f = PrefsFile(alerts: alerts, budget_usd: budgetUSD)
+        let f = PrefsFile(alerts: alerts, budget_usd: budgetUSD,
+                          session_token_limit: sessionTokenLimit,
+                          weekly_token_limit: weeklyTokenLimit)
         if let data = try? JSONEncoder().encode(f) {
             try? data.write(to: url, options: .atomic)
         }
