@@ -1,0 +1,33 @@
+app/Sources/cc-token-bar/ClaudeUsageClient.swift
+  s_9b904f7ea3173e::t_6543e5aaa13f6d 1-142,145,150-160
+  s_9b904f7ea3173e::t_5bbefc14e2dc51 143-144,146-149
+app/Sources/cc-token-bar/DataStore.swift
+  s_9b904f7ea3173e::t_e48563d2945175 14-15,17-18,38-39,44-46,57-93,102-105,113-130
+  s_9b904f7ea3173e::t_9d1739c7ba4b39 131
+app/Sources/cc-token-bar/Views.swift
+  s_9b904f7ea3173e::t_5bbefc14e2dc51 159
+  s_9b904f7ea3173e::t_2e48aef05639c2 46-48,50-51,53,56-57,61,106,112-113,117,120-121,151-152,171-175,497
+app/Package.swift
+  s_9b904f7ea3173e::t_21d55a08f5b146 21-25
+app/Tests/CCTokenBarTests/ClaudeUsageClientTests.swift
+  s_9b904f7ea3173e::t_21d55a08f5b146 1,3-4,10,12,14,20,24,30,37
+  s_9b904f7ea3173e::t_05076057d32877 2,5-9,11,13,15-19,21-23,25-29,31-36
+app/Sources/cc-token-bar/Models.swift
+  s_9b904f7ea3173e::t_6543e5aaa13f6d 108-125
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "6b797a02f8d054af5c7fe1743cfd4a2ec05a3d7e",
+  "prompts": {},
+  "sessions": {
+    "s_9b904f7ea3173e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fe2b5-e905-73e1-8a84-709d8d273b4f",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "diegopacheco <diego.pacheco.it@gmail.com>"
+    }
+  }
+}
