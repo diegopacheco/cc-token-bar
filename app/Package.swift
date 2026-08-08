@@ -18,6 +18,11 @@ let package = Package(
             name: "cc-metrics-test",
             dependencies: ["CCMetrics"],
             path: "Sources/cc-metrics-test"
+        ),
+        .testTarget(
+            name: "CCTokenBarTests",
+            dependencies: ["cc-token-bar"],
+            path: "Tests/CCTokenBarTests"
         )
     ]
 )

@@ -95,7 +95,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func showPanel() {
         guard let button = statusItem.button,
               let buttonWindow = button.window else { return }
-        store.refreshNow()
         let buttonFrameOnScreen = buttonWindow.convertToScreen(button.convert(button.bounds, to: nil))
         let screen = buttonWindow.screen ?? NSScreen.main
         let visible = screen?.visibleFrame ?? .zero

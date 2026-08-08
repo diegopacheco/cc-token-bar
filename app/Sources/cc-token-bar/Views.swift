@@ -43,20 +43,23 @@ struct PanelView: View {
     }
 
     var body: some View {
-        Group {
-            if embedScroll {
-                ScrollView(.vertical, showsIndicators: false) { content }
-            } else {
-                content
-            }
-        }
-        .frame(width: 360)
-    }
-
-    private var content: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
             tabBar
+            if embedScroll {
+                ScrollView(.vertical, showsIndicators: false) { tabContent }
+                    .id(tab)
+            } else {
+                tabContent
+            }
+        }
+        .padding(.top, 12)
+        .padding(.bottom, 8)
+        .frame(width: 360)
+    }
+
+    private var tabContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
             switch tab {
             case .cost:
                 subscriptionSection
@@ -83,8 +86,6 @@ struct PanelView: View {
             }
             footer
         }
-        .padding(.top, 12)
-        .padding(.bottom, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -102,21 +103,22 @@ struct PanelView: View {
 
     private func tabButton(_ t: PanelTab, _ symbol: String, _ name: String) -> some View {
         Button {
-            var tx = Transaction()
-            tx.disablesAnimations = true
-            withTransaction(tx) { tab = t }
+            tab = t
         } label: {
             VStack(spacing: 3) {
                 Image(systemName: symbol).font(.system(size: 14, weight: .medium))
                 Text(name).font(.system(size: 8)).lineLimit(1)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 5)
+            .frame(maxWidth: .infinity, minHeight: 40)
+            .contentShape(Rectangle())
             .background(tab == t ? Color.accentColor.opacity(0.18) : Color.clear)
             .foregroundStyle(tab == t ? Color.accentColor : Color.secondary)
             .clipShape(RoundedRectangle(cornerRadius: 7))
+            .animation(.easeOut(duration: 0.12), value: tab)
         }
         .buttonStyle(.plain)
+        .frame(maxWidth: .infinity)
+        .contentShape(Rectangle())
         .help(name)
     }
 
@@ -146,14 +148,15 @@ struct PanelView: View {
     }
 
     private func usageBar(_ window: UsageWindow, limit: Int) -> some View {
-        let used = limit > 0 ? min(1.0, Double(window.tokens) / Double(limit)) : 0
+        let used = window.utilization.map { min(1, $0 / 100) }
+            ?? (limit > 0 ? min(1, Double(window.tokens) / Double(limit)) : 0)
         let left = max(0, 1 - used)
         let color = Self.gaugeColor(left: left)
         return VStack(alignment: .leading, spacing: 5) {
             HStack {
                 Text(window.label).font(.system(size: 12, weight: .medium))
                 Spacer()
-                Text(String(format: "%.0f%% left", left * 100))
+                Text(String(format: window.utilization == nil ? "%.0f%% left" : "%.1f%% left", left * 100))
                     .font(.system(size: 12, weight: .semibold))
                     .monospacedDigit()
             }
@@ -165,7 +168,11 @@ struct PanelView: View {
             }
             .frame(height: 8)
             HStack {
-                Text("\(DataStore.formatTokens(window.tokens)) / \(DataStore.formatTokens(limit))")
+                if window.utilization != nil {
+                    Text("Live Claude usage")
+                } else {
+                    Text("\(DataStore.formatTokens(window.tokens)) / \(DataStore.formatTokens(limit))")
+                }
                 Spacer()
                 Text(DataStore.formatReset(window.resetAt, now: Date()))
             }
@@ -487,7 +494,7 @@ struct PanelView: View {
                     .fieldChrome().frame(width: 130)
                 Text("per week").font(.system(size: 11)).foregroundStyle(.secondary)
             }
-            Text("Token caps used by the bars on the Cost tab. Claude never exposes real plan limits locally, so set these to match your plan.")
+            Text("Fallback token caps used only when live Claude subscription usage is unavailable.")
                 .font(.system(size: 11)).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }

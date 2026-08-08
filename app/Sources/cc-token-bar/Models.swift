@@ -105,6 +105,24 @@ struct UsageWindow: Equatable {
     let label: String
     let tokens: Int
     let resetAt: Date?
+    let utilization: Double?
+
+    init(label: String, tokens: Int, resetAt: Date?, utilization: Double? = nil) {
+        self.label = label
+        self.tokens = tokens
+        self.resetAt = resetAt
+        self.utilization = utilization
+    }
+}
+
+struct SubscriptionLimit: Equatable {
+    let utilization: Double
+    let resetAt: Date?
+}
+
+struct SubscriptionUsage: Equatable {
+    let session: SubscriptionLimit?
+    let weekly: SubscriptionLimit?
 }
 
 struct Aggregates: Equatable {

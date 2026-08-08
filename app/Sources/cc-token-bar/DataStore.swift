@@ -11,9 +11,11 @@ final class DataStore: ObservableObject {
     private let toolsDir: URL
     private var watcher: FSWatcher?
     private var visibleTimer: Timer?
-    private let queue = DispatchQueue(label: "cc-token-bar.scan", qos: .utility)
-    private var pendingRefresh = false
+    private let queue = DispatchQueue(label: "cc-token-bar.scan", qos: .userInitiated)
+    private var refreshGeneration = 0
     private let transcripts = TranscriptScanner()
+    private let subscriptionClient = ClaudeUsageClient()
+    private var subscriptionUsage: SubscriptionUsage?
 
     init() {
         let home = FileManager.default.homeDirectoryForCurrentUser
@@ -33,13 +35,15 @@ final class DataStore: ObservableObject {
     }
 
     func refreshNow() {
-        scheduleRefresh()
+        scheduleRefresh(delay: 0)
+        refreshSubscription()
     }
 
     func startVisibleRefresh() {
         stopVisibleRefresh()
-        let t = Timer(timeInterval: 5, repeats: true) { [weak self] _ in
-            self?.scheduleRefresh()
+        refreshNow()
+        let t = Timer(timeInterval: 3, repeats: true) { [weak self] _ in
+            self?.refreshNow()
         }
         RunLoop.main.add(t, forMode: .common)
         visibleTimer = t
@@ -50,12 +54,43 @@ final class DataStore: ObservableObject {
         visibleTimer = nil
     }
 
-    private func scheduleRefresh() {
-        if pendingRefresh { return }
-        pendingRefresh = true
-        queue.asyncAfter(deadline: .now() + .milliseconds(250)) { [weak self] in
-            self?.pendingRefresh = false
-            self?.refresh()
+    private func scheduleRefresh(delay: TimeInterval = 0.1) {
+        queue.async { [weak self] in
+            guard let self = self else { return }
+            self.refreshGeneration += 1
+            let generation = self.refreshGeneration
+            self.queue.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self = self, self.refreshGeneration == generation else { return }
+                self.refresh()
+            }
+        }
+    }
+
+    private func refreshSubscription() {
+        subscriptionClient.fetch { [weak self] result in
+            guard let self = self else { return }
+            self.queue.async {
+                switch result {
+                case let .success(usage):
+                    self.subscriptionUsage = usage
+                    self.publishSubscription(usage)
+                case .unavailable:
+                    guard self.subscriptionUsage != nil else { return }
+                    self.subscriptionUsage = nil
+                    self.scheduleRefresh(delay: 0)
+                case .failed:
+                    break
+                }
+            }
+        }
+    }
+
+    private func publishSubscription(_ usage: SubscriptionUsage) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            var next = self.agg
+            Self.applySubscription(usage, to: &next)
+            if self.agg != next { self.agg = next }
         }
     }
 
@@ -64,11 +99,33 @@ final class DataStore: ObservableObject {
         let pricing = cfg.pricing.isEmpty ? Pricing.fallback : cfg.pricing
         let sessions = mergedSessions()
         let tools = loadTools()
-        let next = aggregate(sessions: sessions, tools: tools, pricing: pricing)
+        var next = aggregate(sessions: sessions, tools: tools, pricing: pricing)
+        if let usage = subscriptionUsage {
+            Self.applySubscription(usage, to: &next)
+        }
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             if self.agg != next { self.agg = next }
             self.onAgg?(next)
+        }
+    }
+
+    private static func applySubscription(_ usage: SubscriptionUsage, to agg: inout Aggregates) {
+        if let session = usage.session {
+            agg.sessionUsage = UsageWindow(
+                label: "Session (5h)",
+                tokens: agg.sessionUsage.tokens,
+                resetAt: session.resetAt,
+                utilization: session.utilization
+            )
+        }
+        if let weekly = usage.weekly {
+            agg.weeklyUsage = UsageWindow(
+                label: "Weekly",
+                tokens: agg.weeklyUsage.tokens,
+                resetAt: weekly.resetAt,
+                utilization: weekly.utilization
+            )
         }
     }
 
