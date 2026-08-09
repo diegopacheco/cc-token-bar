@@ -1,0 +1,41 @@
+app/Sources/cc-token-bar/ClaudeUsageClient.swift
+  s_808575b4aecfde::t_8eaac114dff1f1 2,137,143,147-155,158
+  s_808575b4aecfde::t_f5434b1fe6d5d2 44,56,58,87,91-92,164-168
+  s_808575b4aecfde::t_c5b4f9a1bba902 7,88-90
+  s_808575b4aecfde::t_657061df2fb5b4 169
+changelog.md
+  s_808575b4aecfde::t_f5434b1fe6d5d2 7,9
+  s_808575b4aecfde::t_8eaac114dff1f1 1-6
+  s_808575b4aecfde::t_c5b4f9a1bba902 8
+app/Sources/cc-token-bar/Views.swift
+  s_808575b4aecfde::t_f5434b1fe6d5d2 144-145,150-151,158,165,173,176-178
+  s_808575b4aecfde::t_8eaac114dff1f1 143
+  s_808575b4aecfde::t_6f1bf8f66413bb 487,498-501
+app/Sources/cc-token-bar/DataStore.swift
+  s_808575b4aecfde::t_f5434b1fe6d5d2 433,437,440,447,450
+  s_808575b4aecfde::t_c5b4f9a1bba902 25,77-85,142-152
+  s_808575b4aecfde::t_8eaac114dff1f1 126,134
+  s_808575b4aecfde::t_64307245cb12c3 153
+app/Tests/CCTokenBarTests/ClaudeUsageClientTests.swift
+  s_808575b4aecfde::t_8eaac114dff1f1 38-64
+  s_808575b4aecfde::t_b7f5103094831c 65-76
+app/Sources/cc-token-bar/Models.swift
+  s_808575b4aecfde::t_c5b4f9a1bba902 118,123
+  s_808575b4aecfde::t_f5434b1fe6d5d2 131-132
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "9864ffa377360afae84ca37e41cf43b05eed47b4",
+  "prompts": {},
+  "sessions": {
+    "s_808575b4aecfde": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fe899-c373-75f0-bbfd-a6cc0c085698",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "diegopacheco <diego.pacheco.it@gmail.com>"
+    }
+  }
+}
