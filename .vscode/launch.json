@@ -1,0 +1,44 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:cc-token-bar}/app",
+            "name": "Debug cc-token-bar (app)",
+            "target": "cc-token-bar",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug cc-token-bar (app)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:cc-token-bar}/app",
+            "name": "Release cc-token-bar (app)",
+            "target": "cc-token-bar",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release cc-token-bar (app)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:cc-token-bar}/app",
+            "name": "Debug cc-metrics-test (app)",
+            "target": "cc-metrics-test",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug cc-metrics-test (app)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:cc-token-bar}/app",
+            "name": "Release cc-metrics-test (app)",
+            "target": "cc-metrics-test",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release cc-metrics-test (app)"
+        }
+    ]
+}

@@ -1,8 +1,10 @@
 import Foundation
+import Security
 
 final class ClaudeUsageClient {
     enum FetchResult {
         case success(SubscriptionUsage)
+        case rateLimited(Date)
         case unavailable
         case failed
     }
@@ -39,6 +41,7 @@ final class ClaudeUsageClient {
     private let session: URLSession
     private var accessToken: String?
     private var isFetching = false
+    private var nextFetchAt = Date.distantPast
 
     init() {
         let config = URLSessionConfiguration.ephemeral
@@ -50,8 +53,9 @@ final class ClaudeUsageClient {
 
     func fetch(completion: @escaping (FetchResult) -> Void) {
         queue.async { [weak self] in
-            guard let self = self, !self.isFetching else { return }
+            guard let self = self, !self.isFetching, Date() >= self.nextFetchAt else { return }
             self.isFetching = true
+            self.nextFetchAt = Date().addingTimeInterval(60)
             guard let token = self.accessToken ?? self.loadAccessToken() else {
                 self.isFetching = false
                 completion(.unavailable)
@@ -78,6 +82,12 @@ final class ClaudeUsageClient {
                     if http.statusCode == 401 || http.statusCode == 403 {
                         self.accessToken = nil
                         completion(.unavailable)
+                        return
+                    }
+                    if http.statusCode == 429 {
+                        let resetAt = Date().addingTimeInterval(Self.retryDelay(from: http))
+                        self.nextFetchAt = resetAt
+                        completion(.rateLimited(resetAt))
                         return
                     }
                     guard (200..<300).contains(http.statusCode),
@@ -124,37 +134,37 @@ final class ClaudeUsageClient {
         if let token = ProcessInfo.processInfo.environment["CLAUDE_CODE_OAUTH_TOKEN"], !token.isEmpty {
             return token
         }
-        if let data = keychainCredentials(), let token = decodeToken(data) {
+        if let data = keychainCredentials(), let token = Self.decodeAccessToken(data) {
             return token
         }
         let url = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".claude/.credentials.json")
         guard let data = try? Data(contentsOf: url) else { return nil }
-        return decodeToken(data)
+        return Self.decodeAccessToken(data)
     }
 
     private func keychainCredentials() -> Data? {
-        let process = Process()
-        let output = Pipe()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/security")
-        process.arguments = ["find-generic-password", "-s", "Claude Code-credentials", "-w"]
-        process.standardOutput = output
-        process.standardError = FileHandle.nullDevice
-        let finished = DispatchSemaphore(value: 0)
-        process.terminationHandler = { _ in finished.signal() }
-        guard (try? process.run()) != nil else { return nil }
-        guard finished.wait(timeout: .now() + 2) == .success else {
-            process.terminate()
-            return nil
-        }
-        guard process.terminationStatus == 0 else { return nil }
-        return output.fileHandleForReading.readDataToEndOfFile()
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "Claude Code-credentials",
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var item: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess else { return nil }
+        return item as? Data
     }
 
-    private func decodeToken(_ data: Data) -> String? {
+    static func decodeAccessToken(_ data: Data) -> String? {
         guard let credentials = try? JSONDecoder().decode(Credentials.self, from: data),
               let token = credentials.claudeAiOauth?.accessToken,
               !token.isEmpty else { return nil }
         return token
+    }
+
+    private static func retryDelay(from response: HTTPURLResponse) -> TimeInterval {
+        guard let value = response.value(forHTTPHeaderField: "Retry-After"),
+              let seconds = TimeInterval(value) else { return 60 }
+        return max(60, seconds)
     }
 }

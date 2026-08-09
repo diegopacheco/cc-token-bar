@@ -22,6 +22,7 @@ final class DataStore: ObservableObject {
         self.dataDir = home.appendingPathComponent(".cc-token-bar")
         self.sessionsDir = dataDir.appendingPathComponent("sessions")
         self.toolsDir = dataDir.appendingPathComponent("tools")
+        self.subscriptionUsage = Self.loadSubscription(from: dataDir)
     }
 
     func start() {
@@ -73,6 +74,15 @@ final class DataStore: ObservableObject {
                 switch result {
                 case let .success(usage):
                     self.subscriptionUsage = usage
+                    Self.saveSubscription(usage, to: self.dataDir)
+                    self.publishSubscription(usage)
+                case let .rateLimited(resetAt):
+                    let usage = SubscriptionUsage(
+                        session: SubscriptionLimit(utilization: 100, resetAt: resetAt),
+                        weekly: self.subscriptionUsage?.weekly
+                    )
+                    self.subscriptionUsage = usage
+                    Self.saveSubscription(usage, to: self.dataDir)
                     self.publishSubscription(usage)
                 case .unavailable:
                     guard self.subscriptionUsage != nil else { return }
@@ -113,7 +123,7 @@ final class DataStore: ObservableObject {
     private static func applySubscription(_ usage: SubscriptionUsage, to agg: inout Aggregates) {
         if let session = usage.session {
             agg.sessionUsage = UsageWindow(
-                label: "Session (5h)",
+                label: "Current session",
                 tokens: agg.sessionUsage.tokens,
                 resetAt: session.resetAt,
                 utilization: session.utilization
@@ -121,12 +131,24 @@ final class DataStore: ObservableObject {
         }
         if let weekly = usage.weekly {
             agg.weeklyUsage = UsageWindow(
-                label: "Weekly",
+                label: "All models",
                 tokens: agg.weeklyUsage.tokens,
                 resetAt: weekly.resetAt,
                 utilization: weekly.utilization
             )
         }
+    }
+
+    private static func loadSubscription(from dataDir: URL) -> SubscriptionUsage? {
+        let url = dataDir.appendingPathComponent("subscription-usage.json")
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return try? JSONDecoder().decode(SubscriptionUsage.self, from: data)
+    }
+
+    private static func saveSubscription(_ usage: SubscriptionUsage, to dataDir: URL) {
+        let url = dataDir.appendingPathComponent("subscription-usage.json")
+        guard let data = try? JSONEncoder().encode(usage) else { return }
+        try? data.write(to: url, options: .atomic)
     }
 
     private func mergedSessions() -> [SessionFile] {
@@ -408,24 +430,24 @@ final class DataStore: ObservableObject {
             blockStart = cal.date(from: c) ?? s.when
         }
         guard let start = blockStart else {
-            return UsageWindow(label: "Session (5h)", tokens: 0, resetAt: nil)
+            return UsageWindow(label: "Current session", tokens: 0, resetAt: nil)
         }
         let end = start.addingTimeInterval(blockLength)
         guard now < end else {
-            return UsageWindow(label: "Session (5h)", tokens: 0, resetAt: nil)
+            return UsageWindow(label: "Current session", tokens: 0, resetAt: nil)
         }
         let total = sorted.filter { $0.when >= start && $0.when < end }.reduce(0) { $0 + $1.tokens }
-        return UsageWindow(label: "Session (5h)", tokens: total, resetAt: end)
+        return UsageWindow(label: "Current session", tokens: total, resetAt: end)
     }
 
     static func weeklyWindow(stamps: [(when: Date, tokens: Int)], now: Date) -> UsageWindow {
         var cal = Calendar(identifier: .gregorian)
         cal.firstWeekday = 2
         guard let week = cal.dateInterval(of: .weekOfYear, for: now) else {
-            return UsageWindow(label: "Weekly", tokens: 0, resetAt: nil)
+            return UsageWindow(label: "All models", tokens: 0, resetAt: nil)
         }
         let total = stamps.filter { $0.when >= week.start && $0.when < week.end }.reduce(0) { $0 + $1.tokens }
-        return UsageWindow(label: "Weekly", tokens: total, resetAt: week.end)
+        return UsageWindow(label: "All models", tokens: total, resetAt: week.end)
     }
 
     static func formatReset(_ date: Date?, now: Date) -> String {

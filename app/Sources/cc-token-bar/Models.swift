@@ -115,12 +115,12 @@ struct UsageWindow: Equatable {
     }
 }
 
-struct SubscriptionLimit: Equatable {
+struct SubscriptionLimit: Codable, Equatable {
     let utilization: Double
     let resetAt: Date?
 }
 
-struct SubscriptionUsage: Equatable {
+struct SubscriptionUsage: Codable, Equatable {
     let session: SubscriptionLimit?
     let weekly: SubscriptionLimit?
 }
@@ -128,8 +128,8 @@ struct SubscriptionUsage: Equatable {
 struct Aggregates: Equatable {
     var today: TokenTotals = TokenTotals()
     var lifetime: TokenTotals = TokenTotals()
-    var sessionUsage: UsageWindow = UsageWindow(label: "Session (5h)", tokens: 0, resetAt: nil)
-    var weeklyUsage: UsageWindow = UsageWindow(label: "Weekly", tokens: 0, resetAt: nil)
+    var sessionUsage: UsageWindow = UsageWindow(label: "Current session", tokens: 0, resetAt: nil)
+    var weeklyUsage: UsageWindow = UsageWindow(label: "All models", tokens: 0, resetAt: nil)
     var byModel: [(String, TokenTotals)] = []
     var byDay: [DayBucket] = []
     var tools: [ToolStat] = []

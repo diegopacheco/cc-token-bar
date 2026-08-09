@@ -140,30 +140,29 @@ struct PanelView: View {
 
     private var subscriptionSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionTitle("Subscription left")
-            usageBar(store.agg.sessionUsage, limit: prefs.sessionTokenLimit)
-            usageBar(store.agg.weeklyUsage, limit: prefs.weeklyTokenLimit)
+            sectionTitle("Plan usage limits")
+            usageBar(store.agg.sessionUsage)
+            usageBar(store.agg.weeklyUsage)
         }
         .padding(.horizontal, 14).padding(.top, 4).padding(.bottom, 12)
     }
 
-    private func usageBar(_ window: UsageWindow, limit: Int) -> some View {
-        let used = window.utilization.map { min(1, $0 / 100) }
-            ?? (limit > 0 ? min(1, Double(window.tokens) / Double(limit)) : 0)
+    private func usageBar(_ window: UsageWindow) -> some View {
+        let used = window.utilization.map { min(1, $0 / 100) } ?? 0
         let left = max(0, 1 - used)
         let color = Self.gaugeColor(left: left)
         return VStack(alignment: .leading, spacing: 5) {
             HStack {
                 Text(window.label).font(.system(size: 12, weight: .medium))
                 Spacer()
-                Text(String(format: window.utilization == nil ? "%.0f%% left" : "%.1f%% left", left * 100))
+                Text(window.utilization.map { String(format: "%.0f%% used", $0) } ?? "Unavailable")
                     .font(.system(size: 12, weight: .semibold))
                     .monospacedDigit()
             }
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     Capsule().fill(Color.primary.opacity(0.10))
-                    Capsule().fill(color).frame(width: max(2, geo.size.width * used))
+                    Capsule().fill(color).frame(width: used > 0 ? max(2, geo.size.width * used) : 0)
                 }
             }
             .frame(height: 8)
@@ -171,10 +170,12 @@ struct PanelView: View {
                 if window.utilization != nil {
                     Text("Live Claude usage")
                 } else {
-                    Text("\(DataStore.formatTokens(window.tokens)) / \(DataStore.formatTokens(limit))")
+                    Text("Live Claude usage unavailable")
                 }
                 Spacer()
-                Text(DataStore.formatReset(window.resetAt, now: Date()))
+                if window.utilization != nil {
+                    Text(DataStore.formatReset(window.resetAt, now: Date()))
+                }
             }
             .font(.system(size: 10)).foregroundStyle(.secondary).monospacedDigit()
         }
@@ -483,7 +484,7 @@ struct PanelView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             divider
-            sectionTitle("Subscription limits")
+            sectionTitle("Local token reference")
             HStack(spacing: 6) {
                 TextField("tokens", value: $prefs.sessionTokenLimit, format: .number)
                     .fieldChrome().frame(width: 130)
@@ -494,7 +495,10 @@ struct PanelView: View {
                     .fieldChrome().frame(width: 130)
                 Text("per week").font(.system(size: 11)).foregroundStyle(.secondary)
             }
-            Text("Fallback token caps used only when live Claude subscription usage is unavailable.")
+            Text("Current local totals: \(DataStore.formatTokens(store.agg.sessionUsage.tokens)) / \(DataStore.formatTokens(prefs.sessionTokenLimit)) per 5h and \(DataStore.formatTokens(store.agg.weeklyUsage.tokens)) / \(DataStore.formatTokens(prefs.weeklyTokenLimit)) per week.")
+                .font(.system(size: 11)).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("Plan usage always uses Claude's live utilization.")
                 .font(.system(size: 11)).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
