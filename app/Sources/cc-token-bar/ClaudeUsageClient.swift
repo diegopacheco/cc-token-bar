@@ -39,16 +39,27 @@ final class ClaudeUsageClient {
 
     private let queue = DispatchQueue(label: "cc-token-bar.subscription", qos: .userInitiated)
     private let session: URLSession
+    private let tokenLoader: (() -> String?)?
     private var accessToken: String?
     private var isFetching = false
     private var nextFetchAt = Date.distantPast
 
-    init() {
+    convenience init() {
         let config = URLSessionConfiguration.ephemeral
         config.requestCachePolicy = .reloadIgnoringLocalCacheData
         config.timeoutIntervalForRequest = 2.5
         config.timeoutIntervalForResource = 3
-        session = URLSession(configuration: config)
+        self.init(configuration: config, tokenLoader: nil)
+    }
+
+    init(configuration: URLSessionConfiguration, tokenLoader: (() -> String?)?) {
+        self.session = URLSession(configuration: configuration)
+        self.tokenLoader = tokenLoader
+    }
+
+    private func currentToken() -> String? {
+        if let loader = tokenLoader { return loader() }
+        return loadAccessToken()
     }
 
     func fetch(completion: @escaping (FetchResult) -> Void) {
@@ -56,50 +67,70 @@ final class ClaudeUsageClient {
             guard let self = self, !self.isFetching, Date() >= self.nextFetchAt else { return }
             self.isFetching = true
             self.nextFetchAt = Date().addingTimeInterval(60)
-            guard let token = self.accessToken ?? self.loadAccessToken() else {
-                self.isFetching = false
-                completion(.unavailable)
-                return
-            }
-            self.accessToken = token
-            var request = URLRequest(url: URL(string: "https://api.anthropic.com/api/oauth/usage")!)
-            request.timeoutInterval = 2.5
-            request.cachePolicy = .reloadIgnoringLocalCacheData
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-            request.setValue("oauth-2025-04-20", forHTTPHeaderField: "anthropic-beta")
-            request.setValue("application/json", forHTTPHeaderField: "Accept")
-            request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
-            request.setValue("claude-code/2.1", forHTTPHeaderField: "User-Agent")
-            self.session.dataTask(with: request) { [weak self] data, response, error in
-                self?.queue.async {
-                    guard let self = self else { return }
-                    self.isFetching = false
-                    guard error == nil,
-                          let http = response as? HTTPURLResponse else {
-                        completion(.failed)
-                        return
-                    }
-                    if http.statusCode == 401 || http.statusCode == 403 {
-                        self.accessToken = nil
-                        completion(.unavailable)
-                        return
-                    }
-                    if http.statusCode == 429 {
-                        let resetAt = Date().addingTimeInterval(Self.retryDelay(from: http))
-                        self.nextFetchAt = resetAt
-                        completion(.rateLimited(resetAt))
-                        return
-                    }
-                    guard (200..<300).contains(http.statusCode),
-                          let data = data,
-                          let usage = Self.decode(data) else {
-                        completion(.failed)
-                        return
-                    }
-                    completion(.success(usage))
-                }
-            }.resume()
+            self.send(reloadTokenOnAuthFailure: true, completion: completion)
         }
+    }
+
+    private func send(reloadTokenOnAuthFailure: Bool, completion: @escaping (FetchResult) -> Void) {
+        guard let token = accessToken ?? currentToken() else {
+            isFetching = false
+            completion(.unavailable)
+            return
+        }
+        accessToken = token
+        var request = URLRequest(url: URL(string: "https://api.anthropic.com/api/oauth/usage")!)
+        request.timeoutInterval = 2.5
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("oauth-2025-04-20", forHTTPHeaderField: "anthropic-beta")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
+        request.setValue("claude-code/2.1", forHTTPHeaderField: "User-Agent")
+        session.dataTask(with: request) { [weak self] data, response, error in
+            self?.queue.async {
+                guard let self = self else { return }
+                guard error == nil,
+                      let http = response as? HTTPURLResponse else {
+                    self.isFetching = false
+                    completion(.failed)
+                    return
+                }
+                if http.statusCode == 401 || http.statusCode == 403 {
+                    self.accessToken = nil
+                    if reloadTokenOnAuthFailure {
+                        guard let refreshed = self.currentToken() else {
+                            self.isFetching = false
+                            completion(.unavailable)
+                            return
+                        }
+                        if refreshed != token {
+                            self.accessToken = refreshed
+                            self.send(reloadTokenOnAuthFailure: false, completion: completion)
+                            return
+                        }
+                    }
+                    self.isFetching = false
+                    completion(.failed)
+                    return
+                }
+                if http.statusCode == 429 {
+                    let resetAt = Date().addingTimeInterval(Self.retryDelay(from: http))
+                    self.nextFetchAt = resetAt
+                    self.isFetching = false
+                    completion(.rateLimited(resetAt))
+                    return
+                }
+                guard (200..<300).contains(http.statusCode),
+                      let data = data,
+                      let usage = Self.decode(data) else {
+                    self.isFetching = false
+                    completion(.failed)
+                    return
+                }
+                self.isFetching = false
+                completion(.success(usage))
+            }
+        }.resume()
     }
 
     static func decode(_ data: Data) -> SubscriptionUsage? {
